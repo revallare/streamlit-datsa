@@ -1,27 +1,20 @@
 # =============================================================================
-#  PREDIKSI NILAI AKHIR MATEMATIKA SISWA MENGGUNAKAN MACHINE LEARNING
-#  DAN IMPLEMENTASI STREAMLIT — KELOMPOK 2 (MATA KULIAH DATA SAINS)
+#  APLIKASI STREAMLIT TERPADU - PREDIKSI NILAI AKHIR MATEMATIKA SISWA
+#  Executive Dark Analytics Edition (Machine Learning: Regresi & Clustering)
 #
-#  Satu file terpadu berisi: pemuatan data -> pelatihan model regresi &
-#  clustering (train-test split, pemilihan algoritma, tuning, evaluasi,
-#  interpretasi) -> aplikasi web interaktif bertema gelap.
+#  Satu file berisi: pemuatan data -> pelatihan model regresi & clustering
+#  (train-test split, pemilihan algoritma, tuning, evaluasi, interpretasi) ->
+#  dashboard interaktif Plotly.
 #
-#  Struktur repo untuk deploy (Streamlit Community Cloud / lokal):
+#  Struktur folder untuk deploy (Streamlit Community Cloud / lokal):
 #      app_gabungan.py        <- file ini
 #      student-mat.xlsx       <- dataset (jika tidak ada, aplikasi meminta upload)
-#      requirements.txt       <- daftar dependensi
-#
-#  (Opsional) Untuk tema gelap native Streamlit tanpa jeda transisi,
-#  tambahkan file .streamlit/config.toml berisi:
-#      [theme]
-#      base="dark"
-#      primaryColor="#6366F1"
-#      backgroundColor="#0B0F19"
-#      secondaryBackgroundColor="#111827"
-#      textColor="#F8FAFC"
+#      requirements.txt       <- daftar dependensi (termasuk plotly)
+#      .streamlit/config.toml <- (opsional) konfigurasi tema gelap Streamlit
 #
 #  Jalankan lokal:  streamlit run app_gabungan.py
 # =============================================================================
+import html
 import io
 import json
 import warnings
@@ -30,6 +23,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
@@ -74,22 +68,12 @@ from sklearn.svm import SVR
 
 warnings.filterwarnings("ignore")
 
-# =============================================================================
-#  KONFIGURASI HALAMAN & IDENTITAS PROYEK
-# =============================================================================
-APP_TITLE = "Prediksi Nilai Akhir Matematika Siswa Menggunakan Machine Learning dan Implementasi Streamlit"
-COURSE_INFO = "Kelompok 2 · Mata Kuliah Data Sains"
-TEAM_MEMBERS = [
-    ("Khenya Aghisna Sulihanyalevi", "M0124011"),
-    ("Andhika Rian Wira", "M0124022"),
-    ("Irene Galuh Aditya Putri", "M0124035"),
-    ("Kurrotul Hana", "M0124037"),
-    ("Reni Putri Anggraini", "M0124046"),
-    ("Reval Aulia Rahman Erlangga", "M0124047"),
-]
-
+# -----------------------------------------------------------------------------
+# KONFIGURASI HALAMAN & TEMA EXECUTIVE DARK ANALYTICS
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Prediksi Nilai Akhir Matematika Siswa — Kelompok 2",
+    page_title="Prediksi Nilai Akhir Matematika | ML Analytics",
+    page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -100,359 +84,309 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.20
 PASS_THRESHOLD = 10
 
-MODE_CFG = {
-    "Cepat": dict(
-        cv_repeats=1, n_iter=8, n_tune=2, perm_repeats=10, boot=10,
-        learning_curve=False, trees=150, km_init=10, gmm_init=2, final_init=20,
-    ),
-    "Lengkap": dict(
-        cv_repeats=2, n_iter=25, n_tune=3, perm_repeats=30, boot=30,
-        learning_curve=True, trees=300, km_init=20, gmm_init=5, final_init=50,
-    ),
-}
-
-# =============================================================================
-#  PALET & CUSTOM CSS (TEMA GELAP PROFESIONAL)
-# =============================================================================
+# Palet Executive Dark Analytics
 COLORS = {
-    "bg": "#0B0F19",
+    "bg": "#0B1120",
     "surface": "#111827",
-    "card": "#161E2E",
-    "card_alt": "#1B2538",
+    "surface_alt": "#162033",
     "border": "rgba(148, 163, 184, 0.16)",
     "text": "#F8FAFC",
     "muted": "#94A3B8",
-    "subtle": "#64748B",
-    "primary": "#6366F1",
-    "primary_light": "#818CF8",
-    "sky": "#38BDF8",
+    "cyan": "#38BDF8",
+    "indigo": "#818CF8",
     "emerald": "#10B981",
     "amber": "#F59E0B",
     "rose": "#F43F5E",
     "violet": "#A78BFA",
 }
-CLUSTER_PALETTE = ["#38BDF8", "#6366F1", "#10B981", "#F59E0B", "#F43F5E", "#A78BFA", "#EC4899", "#14B8A6"]
+CLUSTER_PALETTE = ["#F43F5E", "#F59E0B", "#38BDF8", "#10B981", "#A78BFA", "#FB7185", "#2DD4BF", "#60A5FA"]
+
+MODE_CFG = {
+    "Cepat": dict(
+        cv_repeats=1, n_iter=8, n_tune=2, perm_repeats=10, boot=10, learning_curve=False,
+        trees=150, km_init=10, gmm_init=2, final_init=20,
+    ),
+    "Lengkap": dict(
+        cv_repeats=2, n_iter=25, n_tune=3, perm_repeats=30, boot=30, learning_curve=True,
+        trees=300, km_init=20, gmm_init=5, final_init=50,
+    ),
+}
 
 
-def inject_dark_css():
+def inject_custom_css():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-        html, body, [class*="css"], .stApp {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background-color: #0B0F19;
+        html, body, [class*="css"] {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* Canvas gelap dengan ambient glow halus */
+        .stApp {
+            background:
+                radial-gradient(900px circle at 15% -5%, rgba(56, 189, 248, 0.10), transparent 45%),
+                radial-gradient(700px circle at 90% 0%, rgba(99, 102, 241, 0.10), transparent 40%),
+                #0B1120;
             color: #F8FAFC;
         }
-        .stApp {
-            background: radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.09), transparent 38%),
-                        radial-gradient(circle at 88% 8%, rgba(56, 189, 248, 0.06), transparent 32%),
-                        #0B0F19;
-        }
-        [data-testid="stHeader"] {
-            background-color: rgba(11, 15, 25, 0.85);
-            backdrop-filter: blur(8px);
-        }
-        [data-testid="stSidebar"] {
-            background-color: #111827;
+
+        /* Sidebar polished */
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0F172A 0%, #0B1120 100%);
             border-right: 1px solid rgba(148, 163, 184, 0.14);
         }
-        [data-testid="stSidebar"] * {
-            color: #E2E8F0;
-        }
-        .block-container {
-            padding-top: 2rem;
-            padding-bottom: 3rem;
-            max-width: 1320px;
+        section[data-testid="stSidebar"] .block-container {
+            padding-top: 1.2rem;
         }
 
-        /* Hero Header */
-        .hero-box {
-            background: linear-gradient(135deg, rgba(22, 30, 46, 0.96) 0%, rgba(17, 24, 39, 0.96) 100%);
-            border: 1px solid rgba(148, 163, 184, 0.16);
-            border-left: 4px solid #6366F1;
-            border-radius: 14px;
+        /* Main padding */
+        .main .block-container {
+            padding-top: 1.4rem;
+            padding-bottom: 3rem;
+            max-width: 1440px;
+        }
+
+        /* Hero Banner */
+        .hero-banner {
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(22, 34, 56, 0.92) 60%, rgba(30, 41, 59, 0.88) 100%);
+            border: 1px solid rgba(56, 189, 248, 0.22);
+            border-radius: 16px;
             padding: 1.35rem 1.65rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.2rem;
+            box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
         }
         .hero-kicker {
             font-size: 0.72rem;
-            font-weight: 600;
-            letter-spacing: 0.09em;
+            font-weight: 700;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
-            color: #818CF8;
-            margin-bottom: 0.4rem;
+            color: #38BDF8;
+            margin-bottom: 0.3rem;
         }
         .hero-title {
-            font-size: 1.48rem;
-            font-weight: 700;
-            line-height: 1.32;
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
             color: #F8FAFC;
-            margin: 0 0 0.65rem 0;
+            margin: 0 0 0.35rem 0;
+            line-height: 1.2;
         }
-        .hero-pills {
+        .hero-subtitle {
+            font-size: 0.92rem;
+            color: #94A3B8;
+            margin: 0 0 0.85rem 0;
+        }
+        .chip-row {
             display: flex;
             flex-wrap: wrap;
             gap: 0.45rem;
         }
-        .pill {
-            display: inline-block;
-            font-size: 0.76rem;
-            font-weight: 500;
-            color: #CBD5E1;
-            background: rgba(148, 163, 184, 0.10);
-            border: 1px solid rgba(148, 163, 184, 0.18);
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.26rem 0.68rem;
             border-radius: 999px;
-            padding: 0.2rem 0.72rem;
+            font-size: 0.76rem;
+            font-weight: 600;
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            color: #E2E8F0;
         }
-        .pill-accent {
+        .chip-cyan {
+            border-color: rgba(56, 189, 248, 0.40);
+            color: #7DD3FC;
+            background: rgba(14, 116, 144, 0.18);
+        }
+        .chip-emerald {
+            border-color: rgba(16, 185, 129, 0.40);
+            color: #6EE7B7;
+            background: rgba(6, 95, 70, 0.20);
+        }
+        .chip-amber {
+            border-color: rgba(245, 158, 11, 0.42);
+            color: #FCD34D;
+            background: rgba(146, 64, 14, 0.22);
+        }
+        .chip-indigo {
+            border-color: rgba(129, 140, 248, 0.42);
             color: #C7D2FE;
-            background: rgba(99, 102, 241, 0.16);
-            border-color: rgba(99, 102, 241, 0.35);
-        }
-
-        /* Section Titles */
-        .sec-kicker {
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.09em;
-            text-transform: uppercase;
-            color: #818CF8;
-            margin-bottom: 0.15rem;
-        }
-        .sec-title {
-            font-size: 1.15rem;
-            font-weight: 600;
-            color: #F8FAFC;
-            margin: 0 0 0.25rem 0;
-        }
-        .sec-sub {
-            font-size: 0.86rem;
-            color: #94A3B8;
-            margin: 0 0 1rem 0;
+            background: rgba(67, 56, 202, 0.22);
         }
 
         /* KPI Cards */
         .kpi-card {
-            background: #161E2E;
+            background: linear-gradient(155deg, rgba(17, 24, 39, 0.95), rgba(15, 23, 42, 0.86));
             border: 1px solid rgba(148, 163, 184, 0.15);
-            border-radius: 12px;
+            border-radius: 14px;
             padding: 1rem 1.15rem;
             height: 100%;
+            box-shadow: 0 6px 20px rgba(2, 6, 23, 0.30);
+            transition: border-color 0.2s ease;
         }
+        .kpi-card:hover {
+            border-color: rgba(56, 189, 248, 0.35);
+        }
+        .kpi-accent-cyan { border-top: 3px solid #38BDF8; }
+        .kpi-accent-emerald { border-top: 3px solid #10B981; }
+        .kpi-accent-amber { border-top: 3px solid #F59E0B; }
+        .kpi-accent-rose { border-top: 3px solid #F43F5E; }
+        .kpi-accent-indigo { border-top: 3px solid #818CF8; }
+
         .kpi-label {
             font-size: 0.74rem;
-            font-weight: 500;
-            letter-spacing: 0.04em;
+            font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 0.06em;
             color: #94A3B8;
             margin-bottom: 0.35rem;
         }
         .kpi-value {
-            font-size: 1.55rem;
-            font-weight: 700;
-            color: #F8FAFC;
+            font-size: 1.65rem;
+            font-weight: 800;
             font-variant-numeric: tabular-nums;
-            line-height: 1.2;
+            color: #F8FAFC;
+            line-height: 1.15;
+            margin-bottom: 0.25rem;
         }
         .kpi-sub {
             font-size: 0.8rem;
             color: #94A3B8;
-            margin-top: 0.32rem;
+            line-height: 1.35;
         }
-        .badge-safe {
-            display: inline-block;
-            padding: 0.22rem 0.68rem;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: #34D399;
-            background: rgba(16, 185, 129, 0.14);
-            border: 1px solid rgba(16, 185, 129, 0.32);
-        }
-        .badge-risk {
-            display: inline-block;
-            padding: 0.22rem 0.68rem;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: #FB7185;
-            background: rgba(244, 63, 94, 0.14);
-            border: 1px solid rgba(244, 63, 94, 0.32);
-        }
-        .badge-info {
-            display: inline-block;
-            padding: 0.22rem 0.68rem;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: #7DD3FC;
-            background: rgba(56, 189, 248, 0.14);
-            border: 1px solid rgba(56, 189, 248, 0.32);
-        }
+        .delta-pos { color: #34D399; font-weight: 600; }
+        .delta-neg { color: #FB7185; font-weight: 600; }
+        .delta-neu { color: #7DD3FC; font-weight: 600; }
 
-        /* Callout Cards */
-        .callout {
-            background: #161E2E;
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            border-left: 3px solid #6366F1;
-            border-radius: 10px;
-            padding: 0.9rem 1.15rem;
-            margin: 0.75rem 0;
-            font-size: 0.88rem;
+        /* Callout / Insight Panel */
+        .insight-panel {
+            background: rgba(17, 24, 39, 0.82);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-left: 4px solid #38BDF8;
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
+            margin: 0.65rem 0 1rem 0;
+        }
+        .insight-panel-emerald { border-left-color: #10B981; background: rgba(6, 78, 59, 0.16); }
+        .insight-panel-amber { border-left-color: #F59E0B; background: rgba(120, 53, 15, 0.16); }
+        .insight-panel-rose { border-left-color: #F43F5E; background: rgba(136, 19, 55, 0.18); }
+        .insight-title {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #F8FAFC;
+            margin-bottom: 0.35rem;
+        }
+        .insight-body {
+            font-size: 0.85rem;
             color: #CBD5E1;
             line-height: 1.55;
         }
-        .callout-safe { border-left-color: #10B981; background: rgba(16, 185, 129, 0.06); }
-        .callout-risk { border-left-color: #F43F5E; background: rgba(244, 63, 94, 0.06); }
-        .callout-warn { border-left-color: #F59E0B; background: rgba(245, 158, 11, 0.06); }
-        .callout strong { color: #F8FAFC; }
+        .insight-body ul {
+            margin: 0.3rem 0 0 1.1rem;
+            padding: 0;
+        }
+        .insight-body li {
+            margin-bottom: 0.25rem;
+        }
 
-        /* Sidebar Brand & Status */
-        .sb-brand {
-            padding: 0.35rem 0 0.85rem 0;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-            margin-bottom: 0.9rem;
-        }
-        .sb-kicker {
-            font-size: 0.68rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: #818CF8;
-        }
-        .sb-title {
-            font-size: 1.02rem;
+        /* Section Title */
+        .section-heading {
+            font-size: 1.05rem;
             font-weight: 700;
+            color: #F1F5F9;
+            letter-spacing: -0.01em;
+            margin: 1.05rem 0 0.45rem 0;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        /* Sidebar brand & status card */
+        .sb-brand {
+            background: linear-gradient(135deg, rgba(14, 116, 144, 0.24), rgba(67, 56, 202, 0.20));
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            border-radius: 12px;
+            padding: 0.8rem 0.95rem;
+            margin-bottom: 0.85rem;
+        }
+        .sb-brand-title {
+            font-size: 0.98rem;
+            font-weight: 800;
             color: #F8FAFC;
+            margin: 0;
+        }
+        .sb-brand-sub {
+            font-size: 0.74rem;
+            color: #94A3B8;
             margin-top: 0.18rem;
-            line-height: 1.3;
         }
         .sb-status {
-            background: #161E2E;
-            border: 1px solid rgba(148, 163, 184, 0.14);
-            border-radius: 10px;
-            padding: 0.75rem 0.85rem;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 12px;
+            padding: 0.75rem 0.9rem;
             font-size: 0.78rem;
             color: #CBD5E1;
             line-height: 1.6;
         }
-        .sb-status-title {
-            font-size: 0.68rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #94A3B8;
-            margin-bottom: 0.35rem;
-        }
+        .sb-status strong { color: #F8FAFC; }
 
-        /* Team Grid */
-        .team-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: 0.85rem;
-            margin-top: 0.6rem;
-        }
-        .member-card {
-            background: #161E2E;
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            border-radius: 11px;
-            padding: 0.9rem 1.05rem;
-            display: flex;
-            align-items: center;
-            gap: 0.85rem;
-        }
-        .member-idx {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: rgba(99, 102, 241, 0.18);
-            border: 1px solid rgba(99, 102, 241, 0.35);
-            color: #A5B4FC;
-            font-size: 0.82rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .member-name {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #F8FAFC;
-            line-height: 1.3;
-        }
-        .member-nim {
-            font-size: 0.78rem;
-            color: #94A3B8;
-            font-variant-numeric: tabular-nums;
-            margin-top: 0.12rem;
-        }
-
-        /* Streamlit Widget Polish */
-        div[data-testid="stForm"] {
-            background: #111827;
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            border-radius: 14px;
-            padding: 1.15rem 1.25rem;
-        }
-        .stButton > button, .stFormSubmitButton > button, .stDownloadButton > button {
-            border-radius: 9px;
-            font-weight: 600;
-            font-size: 0.86rem;
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            background-color: #1B2538;
-            color: #F8FAFC;
-            transition: all 0.15s ease;
-        }
-        .stButton > button:hover, .stDownloadButton > button:hover {
-            border-color: #6366F1;
-            background-color: #232F46;
-            color: #FFFFFF;
-        }
-        .stFormSubmitButton > button[kind="primary"],
-        .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
-            border: 1px solid #818CF8;
-            color: #FFFFFF;
-        }
-        .stFormSubmitButton > button[kind="primary"]:hover,
-        .stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, #818CF8 0%, #6366F1 100%);
-        }
+        /* Tabs styling */
         .stTabs [data-baseweb="tab-list"] {
             gap: 0.35rem;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            background: rgba(15, 23, 42, 0.75);
+            padding: 0.35rem;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.14);
         }
         .stTabs [data-baseweb="tab"] {
-            background-color: transparent;
+            border-radius: 9px;
+            padding: 0.5rem 0.95rem;
+            font-weight: 600;
+            font-size: 0.86rem;
             color: #94A3B8;
-            font-weight: 500;
-            font-size: 0.88rem;
-            padding: 0.55rem 0.95rem;
-            border-radius: 8px 8px 0 0;
+            background: transparent;
         }
         .stTabs [aria-selected="true"] {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.20), rgba(99, 102, 241, 0.20)) !important;
             color: #F8FAFC !important;
-            background-color: rgba(99, 102, 241, 0.12);
-            border-bottom: 2px solid #6366F1 !important;
+            border: 1px solid rgba(56, 189, 248, 0.35) !important;
         }
-        [data-testid="stExpander"] {
-            background-color: #161E2E;
+        .stTabs [data-baseweb="tab-highlight"] {
+            background-color: transparent !important;
+        }
+
+        /* Expander polish */
+        div[data-testid="stExpander"] {
+            background: rgba(17, 24, 39, 0.58);
             border: 1px solid rgba(148, 163, 184, 0.14);
-            border-radius: 10px;
+            border-radius: 12px;
+            margin-bottom: 0.55rem;
         }
-        .app-footer {
-            margin-top: 2.5rem;
-            padding-top: 1rem;
-            border-top: 1px solid rgba(148, 163, 184, 0.14);
-            font-size: 0.78rem;
-            color: #64748B;
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 0.5rem;
+
+        /* Buttons polish */
+        .stButton > button {
+            border-radius: 9px;
+            font-weight: 600;
+            font-size: 0.80rem;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(30, 41, 59, 0.75);
+            color: #E2E8F0;
+            transition: all 0.15s ease;
+        }
+        .stButton > button:hover {
+            border-color: #38BDF8;
+            color: #F8FAFC;
+            background: rgba(14, 116, 144, 0.28);
+        }
+
+        /* Compact metric overrides if used */
+        div[data-testid="stMetric"] {
+            background: rgba(17, 24, 39, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
         }
         </style>
         """,
@@ -460,18 +394,72 @@ def inject_dark_css():
     )
 
 
-inject_dark_css()
+def kpi_card(label: str, value: str, sub: str = "", accent: str = "cyan") -> str:
+    return (
+        f'<div class="kpi-card kpi-accent-{accent}">'
+        f'<div class="kpi-label">{html.escape(label)}</div>'
+        f'<div class="kpi-value">{html.escape(value)}</div>'
+        f'<div class="kpi-sub">{sub}</div>'
+        f"</div>"
+    )
 
-# =============================================================================
-#  METADATA FITUR (SESUAI DOKUMENTASI UCI & BRIEF STUDENT PERFORMANCE)
-# =============================================================================
+
+def insight_box(title: str, body_html: str, tone: str = "cyan") -> str:
+    cls = f"insight-panel insight-panel-{tone}" if tone != "cyan" else "insight-panel"
+    return f'<div class="{cls}"><div class="insight-title">{html.escape(title)}</div><div class="insight-body">{body_html}</div></div>'
+
+
+def section_heading(text: str):
+    st.markdown(f'<div class="section-heading">{html.escape(text)}</div>', unsafe_allow_html=True)
+
+
+def style_plotly(fig: go.Figure, title: str = "", height: int = 380, show_legend: bool = True) -> go.Figure:
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color="#F1F5F9", family="Inter, sans-serif"), x=0.01, xanchor="left")
+        if title else None,
+        height=height,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(15, 23, 42, 0.55)",
+        font=dict(family="Inter, sans-serif", color="#CBD5E1", size=12),
+        margin=dict(l=48, r=24, t=48 if title else 24, b=42),
+        showlegend=show_legend,
+        legend=dict(
+            bgcolor="rgba(15, 23, 42, 0.72)",
+            bordercolor="rgba(148, 163, 184, 0.18)",
+            borderwidth=1,
+            font=dict(size=11, color="#E2E8F0"),
+        ),
+        hoverlabel=dict(bgcolor="#0F172A", bordercolor="#38BDF8", font=dict(color="#F8FAFC", size=12)),
+    )
+    fig.update_xaxes(
+        gridcolor="rgba(148, 163, 184, 0.10)",
+        zerolinecolor="rgba(148, 163, 184, 0.18)",
+        linecolor="rgba(148, 163, 184, 0.18)",
+        tickfont=dict(color="#94A3B8"),
+        title_font=dict(color="#CBD5E1"),
+    )
+    fig.update_yaxes(
+        gridcolor="rgba(148, 163, 184, 0.10)",
+        zerolinecolor="rgba(148, 163, 184, 0.18)",
+        linecolor="rgba(148, 163, 184, 0.18)",
+        tickfont=dict(color="#94A3B8"),
+        title_font=dict(color="#CBD5E1"),
+    )
+    return fig
+
+
+inject_custom_css()
+
+# -----------------------------------------------------------------------------
+# METADATA FITUR (label, kode ordinal deskriptif, bantuan) - sesuai UCI & Brief
+# -----------------------------------------------------------------------------
 LABELS = {
     "school": "Sekolah",
     "sex": "Jenis kelamin",
     "age": "Usia (tahun)",
-    "address": "Area tempat tinggal",
+    "address": "Tempat tinggal",
     "famsize": "Ukuran keluarga",
-    "Pstatus": "Status tinggal orang tua",
+    "Pstatus": "Status orang tua",
     "Medu": "Pendidikan ibu",
     "Fedu": "Pendidikan ayah",
     "Mjob": "Pekerjaan ibu",
@@ -480,125 +468,103 @@ LABELS = {
     "guardian": "Wali siswa",
     "traveltime": "Waktu tempuh ke sekolah",
     "studytime": "Waktu belajar mingguan",
-    "failures": "Riwayat gagal kelas sebelumnya",
+    "failures": "Riwayat gagal kelas",
     "schoolsup": "Bimbingan tambahan sekolah",
     "famsup": "Dukungan belajar keluarga",
-    "paid": "Les berbayar Matematika",
+    "paid": "Les berbayar (Matematika)",
     "activities": "Kegiatan ekstrakurikuler",
-    "nursery": "Pernah pendidikan prasekolah (TK)",
-    "higher": "Berencana melanjutkan kuliah",
+    "nursery": "Pernah prasekolah (TK)",
+    "higher": "Ingin melanjutkan kuliah",
     "internet": "Akses internet di rumah",
-    "romantic": "Menjalin hubungan romantis",
+    "romantic": "Hubungan romantis",
     "famrel": "Kualitas hubungan keluarga",
     "freetime": "Waktu luang setelah sekolah",
-    "goout": "Intensitas keluar bersama teman",
+    "goout": "Intensitas keluar dgn teman",
     "Dalc": "Konsumsi alkohol hari kerja",
     "Walc": "Konsumsi alkohol akhir pekan",
-    "health": "Kondisi kesehatan saat ini",
-    "absences": "Jumlah ketidakhadiran",
-    "G1": "Nilai periode 1 (G1)",
-    "G2": "Nilai periode 2 (G2)",
-    "G3": "Nilai akhir (G3)",
+    "health": "Kondisi kesehatan",
+    "absences": "Jumlah ketidakhadiran (absen)",
+    "G1": "Nilai Periode 1 (G1)",
+    "G2": "Nilai Periode 2 (G2)",
+    "G3": "Nilai Akhir (G3)",
 }
 
 HELP = {
-    "school": "GP = Gabriel Pereira, MS = Mousinho da Silveira.",
-    "failures": "Nilai aktual dataset 0, 1, 2, atau 3 (3 berarti 3 kali atau lebih).",
-    "absences": "Total ketidakhadiran sekolah (0–93). Default dikecualikan sesuai keputusan cleaning karena waktu pencatatan tidak terinci.",
-    "G1": "Nilai ujian Matematika periode pertama (skala 0–20).",
-    "G2": "Nilai ujian Matematika periode kedua (skala 0–20).",
+    "school": "GP = Gabriel Pereira, MS = Mousinho da Silveira (Portugal).",
+    "Medu": "Kode ordinal 0–4: 0 tidak sekolah s.d. 4 pendidikan tinggi.",
+    "Fedu": "Kode ordinal 0–4: 0 tidak sekolah s.d. 4 pendidikan tinggi.",
+    "traveltime": "Kode kategori waktu tempuh rumah ke sekolah (bukan jumlah jam langsung).",
+    "studytime": "Kode kategori durasi belajar per minggu (contoh: kode 2 = 2–5 jam/minggu).",
+    "failures": "Jumlah kegagalan kelas sebelumnya pada dataset aktual (0, 1, 2, 3).",
+    "famrel": "Skala 1 (sangat buruk) sampai 5 (sangat baik).",
+    "freetime": "Skala 1 (sangat rendah) sampai 5 (sangat tinggi).",
+    "goout": "Skala 1 (sangat jarang) sampai 5 (sangat sering).",
+    "Dalc": "Skala 1 (sangat rendah) sampai 5 (sangat tinggi).",
+    "Walc": "Skala 1 (sangat rendah) sampai 5 (sangat tinggi).",
+    "health": "Skala 1 (sangat buruk) sampai 5 (sangat baik).",
+    "absences": "Total ketidakhadiran (0–93). Pada catatan cleaning proyek, fitur ini dikeluarkan dari model regresi default karena risiko informasi masa depan.",
+    "G1": "Nilai periode pertama Matematika (skala 0–20).",
+    "G2": "Nilai periode kedua Matematika (skala 0–20).",
+    "G3": "Nilai akhir Matematika (skala 0–20). Target prediksi regresi.",
 }
 
-# Label deskriptif untuk variabel ordinal agar pengguna tidak melihat angka kode mentah
+# Label deskriptif untuk kode ordinal (membedakan kode dari besaran asli sesuai Brief)
 ORDINAL_LABELS = {
-    "Medu": {0: "0 — Tidak bersekolah", 1: "1 — SD (Kelas 4)", 2: "2 — SMP (Kelas 5–9)", 3: "3 — SMA / Menengah", 4: "4 — Pendidikan Tinggi"},
-    "Fedu": {0: "0 — Tidak bersekolah", 1: "1 — SD (Kelas 4)", 2: "2 — SMP (Kelas 5–9)", 3: "3 — SMA / Menengah", 4: "4 — Pendidikan Tinggi"},
-    "traveltime": {1: "1 — < 15 menit", 2: "2 — 15–30 menit", 3: "3 — 30–60 menit", 4: "4 — > 60 menit"},
-    "studytime": {1: "1 — < 2 jam/minggu", 2: "2 — 2–5 jam/minggu", 3: "3 — 5–10 jam/minggu", 4: "4 — > 10 jam/minggu"},
-    "failures": {0: "0 — Tidak pernah", 1: "1 — 1 kali", 2: "2 — 2 kali", 3: "3 — 3 kali atau lebih"},
-    "famrel": {1: "1 — Sangat buruk", 2: "2 — Buruk", 3: "3 — Cukup", 4: "4 — Baik", 5: "5 — Sangat baik"},
-    "freetime": {1: "1 — Sangat sedikit", 2: "2 — Sedikit", 3: "3 — Sedang", 4: "4 — Banyak", 5: "5 — Sangat banyak"},
-    "goout": {1: "1 — Sangat jarang", 2: "2 — Jarang", 3: "3 — Sedang", 4: "4 — Sering", 5: "5 — Sangat sering"},
-    "Dalc": {1: "1 — Sangat rendah", 2: "2 — Rendah", 3: "3 — Sedang", 4: "4 — Tinggi", 5: "5 — Sangat tinggi"},
-    "Walc": {1: "1 — Sangat rendah", 2: "2 — Rendah", 3: "3 — Sedang", 4: "4 — Tinggi", 5: "5 — Sangat tinggi"},
-    "health": {1: "1 — Sangat buruk", 2: "2 — Buruk", 3: "3 — Cukup", 4: "4 — Baik", 5: "5 — Sangat baik"},
+    "Medu": {0: "0 · Tidak sekolah", 1: "1 · SD (1–4)", 2: "2 · SMP (5–9)", 3: "3 · SMA", 4: "4 · Pend. Tinggi"},
+    "Fedu": {0: "0 · Tidak sekolah", 1: "1 · SD (1–4)", 2: "2 · SMP (5–9)", 3: "3 · SMA", 4: "4 · Pend. Tinggi"},
+    "traveltime": {1: "1 · <15 mnt", 2: "2 · 15–30 mnt", 3: "3 · 30–60 mnt", 4: "4 · >60 mnt"},
+    "studytime": {1: "1 · <2 jam/mgg", 2: "2 · 2–5 jam/mgg", 3: "3 · 5–10 jam/mgg", 4: "4 · >10 jam/mgg"},
+    "failures": {0: "0 · Tidak pernah", 1: "1 · 1 kali", 2: "2 · 2 kali", 3: "3 · ≥3 kali"},
+    "famrel": {1: "1 · Sangat buruk", 2: "2 · Buruk", 3: "3 · Cukup", 4: "4 · Baik", 5: "5 · Sangat baik"},
+    "health": {1: "1 · Sangat buruk", 2: "2 · Buruk", 3: "3 · Cukup", 4: "4 · Baik", 5: "5 · Sangat baik"},
+    "freetime": {1: "1 · Sangat rendah", 2: "2 · Rendah", 3: "3 · Sedang", 4: "4 · Tinggi", 5: "5 · Sangat tinggi"},
+    "goout": {1: "1 · Sangat jarang", 2: "2 · Jarang", 3: "3 · Sedang", 4: "4 · Sering", 5: "5 · Sangat sering"},
+    "Dalc": {1: "1 · Sangat rendah", 2: "2 · Rendah", 3: "3 · Sedang", 4: "4 · Tinggi", 5: "5 · Sangat tinggi"},
+    "Walc": {1: "1 · Sangat rendah", 2: "2 · Rendah", 3: "3 · Sedang", 4: "4 · Tinggi", 5: "5 · Sangat tinggi"},
 }
 
 VALUE_LABELS = {
     "school": {"GP": "Gabriel Pereira (GP)", "MS": "Mousinho da Silveira (MS)"},
     "sex": {"F": "Perempuan", "M": "Laki-laki"},
     "address": {"U": "Perkotaan", "R": "Pedesaan"},
-    "famsize": {"LE3": "Maksimal 3 orang (LE3)", "GT3": "Lebih dari 3 orang (GT3)"},
+    "famsize": {"LE3": "≤ 3 anggota", "GT3": "> 3 anggota"},
     "Pstatus": {"T": "Tinggal bersama", "A": "Terpisah"},
     "guardian": {"mother": "Ibu", "father": "Ayah", "other": "Lainnya"},
     "reason": {"home": "Dekat rumah", "reputation": "Reputasi sekolah", "course": "Pilihan program", "other": "Lainnya"},
-    "Mjob": {"teacher": "Guru", "health": "Kesehatan", "services": "Pelayanan publik", "at_home": "Di rumah", "other": "Lainnya"},
-    "Fjob": {"teacher": "Guru", "health": "Kesehatan", "services": "Pelayanan publik", "at_home": "Di rumah", "other": "Lainnya"},
+    "Mjob": {"teacher": "Guru", "health": "Kesehatan", "services": "Layanan publik", "at_home": "Di rumah", "other": "Lainnya"},
+    "Fjob": {"teacher": "Guru", "health": "Kesehatan", "services": "Layanan publik", "at_home": "Di rumah", "other": "Lainnya"},
 }
-for _c in ["schoolsup", "famsup", "paid", "activities", "nursery", "higher", "internet", "romantic"]:
+BINARY_YES_NO = ["schoolsup", "famsup", "paid", "activities", "nursery", "higher", "internet", "romantic"]
+for _c in BINARY_YES_NO:
     VALUE_LABELS[_c] = {"yes": "Ya", "no": "Tidak"}
 
-GROUPS = {
-    "Akademik": ["G1", "G2", "failures", "studytime", "absences", "schoolsup", "paid", "higher", "traveltime", "reason", "nursery"],
-    "Keluarga": ["Medu", "Fedu", "Mjob", "Fjob", "guardian", "famrel", "famsup"],
-    "Demografi": ["school", "sex", "age", "address", "famsize", "Pstatus"],
-    "Gaya Hidup": ["goout", "freetime", "Dalc", "Walc", "activities", "internet", "romantic", "health"],
+# Kelompok fitur di Sidebar (G3 sengaja tidak diletakkan di form input prediksi utama)
+SIDEBAR_GROUPS = {
+    "⭐ Fitur Utama (Prioritas)": ["G1", "G2", "failures", "studytime", "higher", "absences", "Medu", "goout"],
+    "📚 Akademik & Dukungan": ["reason", "traveltime", "schoolsup", "paid", "nursery"],
+    "👨‍👩‍👧 Latar Belakang Keluarga": ["Fedu", "Mjob", "Fjob", "guardian", "famrel", "famsup"],
+    "👤 Demografi Siswa": ["school", "sex", "age", "address", "famsize", "Pstatus"],
+    "🎯 Gaya Hidup & Kesehatan": ["activities", "internet", "romantic", "freetime", "Dalc", "Walc", "health"],
 }
 
-COMPACT_FEATURES = [
-    "G1", "G2", "failures", "studytime", "absences", "age",
-    "higher", "schoolsup", "paid", "goout", "Medu", "famsup",
-]
-
-
-# =============================================================================
-#  HELPER VISUALISASI PLOTLY & KOMPONEN UI
-# =============================================================================
-def style_plotly(fig: go.Figure, height: int = 380, title: str = None, margin: dict = None) -> go.Figure:
-    fig.update_layout(
-        template="plotly_dark",
-        height=height,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(17,24,39,0.55)",
-        font=dict(family="Inter, sans-serif", color=COLORS["text"], size=12),
-        title=dict(text=title, font=dict(size=14, color=COLORS["text"]), x=0.0, xanchor="left") if title else None,
-        margin=margin or dict(l=20, r=20, t=44 if title else 24, b=24),
-        legend=dict(
-            bgcolor="rgba(0,0,0,0)",
-            font=dict(size=11, color=COLORS["muted"]),
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-        ),
-        hoverlabel=dict(bgcolor="#1E293B", bordercolor="#475569", font=dict(color="#F8FAFC", size=12)),
-    )
-    fig.update_xaxes(gridcolor="rgba(148,163,184,0.12)", zerolinecolor="rgba(148,163,184,0.22)")
-    fig.update_yaxes(gridcolor="rgba(148,163,184,0.12)", zerolinecolor="rgba(148,163,184,0.22)")
-    return fig
-
-
-def section_header(kicker: str, title: str, subtitle: str = ""):
-    sub_html = f'<p class="sec-sub">{subtitle}</p>' if subtitle else ""
-    st.markdown(
-        f'<div class="sec-kicker">{kicker}</div>'
-        f'<h3 class="sec-title">{title}</h3>'
-        f"{sub_html}",
-        unsafe_allow_html=True,
-    )
-
-
-def kpi_card(label: str, value: str, sub: str = "", badge_html: str = ""):
-    val_block = badge_html if badge_html else f'<div class="kpi-value">{value}</div>'
-    sub_block = f'<div class="kpi-sub">{sub}</div>' if sub else ""
-    st.markdown(
-        f'<div class="kpi-card">'
-        f'<div class="kpi-label">{label}</div>'
-        f"{val_block}{sub_block}"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+# Preset profil siswa untuk simulasi cepat
+STUDENT_PRESETS = {
+    "berprestasi": {
+        "G1": 16, "G2": 17, "failures": 0, "studytime": 3, "higher": "yes", "absences": 2,
+        "Medu": 4, "Fedu": 4, "goout": 2, "Dalc": 1, "Walc": 1, "schoolsup": "no",
+        "famsup": "yes", "internet": "yes", "famrel": 5, "age": 16, "address": "U",
+    },
+    "berisiko": {
+        "G1": 7, "G2": 7, "failures": 2, "studytime": 1, "higher": "no", "absences": 14,
+        "Medu": 1, "Fedu": 1, "goout": 4, "Dalc": 3, "Walc": 4, "schoolsup": "yes",
+        "famsup": "no", "internet": "no", "famrel": 2, "age": 18, "address": "R",
+    },
+    "dropout": {
+        "G1": 6, "G2": 0, "failures": 2, "studytime": 1, "higher": "no", "absences": 0,
+        "Medu": 1, "Fedu": 1, "goout": 4, "Dalc": 2, "Walc": 3, "schoolsup": "no",
+        "famsup": "no", "internet": "no", "famrel": 3, "age": 18, "address": "R",
+    },
+}
 
 
 # =============================================================================
@@ -617,12 +583,14 @@ def read_data(content: bytes, name: str) -> pd.DataFrame:
 
 
 def get_raw_data():
-    for fname in ("student-mat.xlsx", "student-mat.csv"):
-        p = BASE / fname
-        if p.exists():
-            return p.read_bytes(), fname
-    st.warning("File dataset `student-mat.xlsx` tidak ditemukan di direktori aplikasi. Unggah dataset untuk melanjutkan.")
-    up = st.file_uploader("Unggah student-mat.xlsx atau student-mat.csv", type=["xlsx", "csv"], key="upload_dataset")
+    """Cari dataset di folder app atau cwd; jika tidak ada minta upload."""
+    for folder in (BASE, Path.cwd()):
+        for fname in ("student-mat.xlsx", "student-mat.csv"):
+            p = folder / fname
+            if p.exists():
+                return p.read_bytes(), fname
+    st.warning("File `student-mat.xlsx` tidak ditemukan di folder aplikasi. Unggah dataset di bawah ini.")
+    up = st.file_uploader("Unggah student-mat.xlsx (atau .csv)", type=["xlsx", "csv"], key="upload_dataset")
     if up is None:
         st.stop()
     return up.getvalue(), up.name
@@ -632,7 +600,7 @@ raw_bytes, raw_name = get_raw_data()
 df_raw = read_data(raw_bytes, raw_name)
 missing_cols = [c for c in LABELS if c not in df_raw.columns]
 if missing_cols:
-    st.error(f"Dataset tidak valid, kolom berikut tidak ditemukan: {', '.join(missing_cols)}")
+    st.error(f"Dataset tidak valid, kolom hilang: {', '.join(missing_cols)}")
     st.stop()
 DATA_KEY = f"{raw_name}-{df_raw.shape}-{int(pd.util.hash_pandas_object(df_raw, index=True).sum() % 10**12)}"
 
@@ -682,9 +650,9 @@ def eval_labels(Z, labels):
     if len(set(labels)) < 2:
         return dict(silhouette=np.nan, calinski=np.nan, davies=np.nan)
     return dict(
-        silhouette=float(silhouette_score(Z, labels)),
-        calinski=float(calinski_harabasz_score(Z, labels)),
-        davies=float(davies_bouldin_score(Z, labels)),
+        silhouette=silhouette_score(Z, labels),
+        calinski=calinski_harabasz_score(Z, labels),
+        davies=davies_bouldin_score(Z, labels),
     )
 
 
@@ -692,12 +660,12 @@ def eval_labels(Z, labels):
 #  BAGIAN C - PELATIHAN MODEL REGRESI (DI-CACHE)
 # =============================================================================
 @st.cache_resource(show_spinner=False)
-def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
+def train_regression(_df, data_key, use_prev_grades, exclude_absences, mode):
     cfg = MODE_CFG[mode]
     drop_cols = [TARGET]
     if not use_prev_grades:
         drop_cols += ["G1", "G2"]
-    if not include_absences and "absences" in _df.columns:
+    if exclude_absences and "absences" in _df.columns:
         drop_cols.append("absences")
 
     X = _df.drop(columns=drop_cols).copy()
@@ -705,34 +673,44 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
     num_cols, cat_cols = split_columns(X)
     X[num_cols] = X[num_cols].astype(float)
 
+    # 1) Train-test split (stratified menurut kuantil target)
     y_bins = pd.qcut(y, q=5, duplicates="drop", labels=False)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y_bins,
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y_bins
     )
 
+    # 2) Benchmark algoritma dengan Repeated K-Fold CV
     def P(scale):
         return make_preprocessor(num_cols, cat_cols, scale)
 
     models = {
-        "Baseline (Rata-rata)": DummyRegressor(strategy="mean"),
+        "Baseline (rata-rata)": DummyRegressor(strategy="mean"),
         "Linear Regression": Pipeline([("pre", P(True)), ("m", LinearRegression())]),
         "Ridge": Pipeline([("pre", P(True)), ("m", Ridge(alpha=10))]),
         "Lasso": Pipeline([("pre", P(True)), ("m", Lasso(alpha=0.05))]),
         "ElasticNet": Pipeline([("pre", P(True)), ("m", ElasticNet(alpha=0.05, l1_ratio=0.5))]),
         "KNN": Pipeline([("pre", P(True)), ("m", KNeighborsRegressor(n_neighbors=10))]),
         "SVR (RBF)": Pipeline([("pre", P(True)), ("m", SVR(C=5, epsilon=0.5))]),
-        "Random Forest": Pipeline([("pre", P(False)), ("m", RandomForestRegressor(
-            n_estimators=cfg["trees"], random_state=RANDOM_STATE, n_jobs=-1))]),
-        "Extra Trees": Pipeline([("pre", P(False)), ("m", ExtraTreesRegressor(
-            n_estimators=cfg["trees"], random_state=RANDOM_STATE, n_jobs=-1))]),
+        "Random Forest": Pipeline([
+            ("pre", P(False)),
+            ("m", RandomForestRegressor(n_estimators=cfg["trees"], random_state=RANDOM_STATE, n_jobs=-1)),
+        ]),
+        "Extra Trees": Pipeline([
+            ("pre", P(False)),
+            ("m", ExtraTreesRegressor(n_estimators=cfg["trees"], random_state=RANDOM_STATE, n_jobs=-1)),
+        ]),
         "Gradient Boosting": Pipeline([("pre", P(False)), ("m", GradientBoostingRegressor(random_state=RANDOM_STATE))]),
         "HistGradientBoosting": Pipeline([("pre", P(False)), ("m", HistGradientBoostingRegressor(random_state=RANDOM_STATE))]),
     }
     try:
         from xgboost import XGBRegressor
-        models["XGBoost"] = Pipeline([("pre", P(False)), ("m", XGBRegressor(
-            n_estimators=300, learning_rate=0.05, max_depth=3, subsample=0.8,
-            colsample_bytree=0.8, random_state=RANDOM_STATE, n_jobs=-1))])
+        models["XGBoost"] = Pipeline([
+            ("pre", P(False)),
+            ("m", XGBRegressor(
+                n_estimators=300, learning_rate=0.05, max_depth=3, subsample=0.8,
+                colsample_bytree=0.8, random_state=RANDOM_STATE, n_jobs=-1,
+            )),
+        ])
     except Exception:
         pass
 
@@ -743,33 +721,57 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
         r = cross_validate(mdl, X_train, y_train, cv=cv, scoring=scoring, n_jobs=-1)
         rows.append({
             "Model": name,
-            "CV R2": float(r["test_r2"].mean()),
-            "CV R2 std": float(r["test_r2"].std()),
-            "CV MAE": float(-r["test_mae"].mean()),
-            "CV RMSE": float(-r["test_rmse"].mean()),
+            "CV R2": r["test_r2"].mean(),
+            "CV R2 std": r["test_r2"].std(),
+            "CV MAE": -r["test_mae"].mean(),
+            "CV RMSE": -r["test_rmse"].mean(),
         })
     bench = pd.DataFrame(rows).sort_values("CV RMSE").reset_index(drop=True)
 
+    # 3) Tuning hyperparameter pada kandidat terbaik
     param_spaces = {
         "Ridge": {"m__alpha": np.logspace(-2, 3, 30)},
         "Lasso": {"m__alpha": np.logspace(-3, 0.5, 30)},
         "ElasticNet": {"m__alpha": np.logspace(-3, 0.5, 30), "m__l1_ratio": np.linspace(0.1, 0.9, 9)},
         "KNN": {"m__n_neighbors": list(range(3, 40)), "m__weights": ["uniform", "distance"], "m__p": [1, 2]},
-        "SVR (RBF)": {"m__C": np.logspace(-1, 2, 20), "m__epsilon": [0.1, 0.3, 0.5, 1.0],
-                      "m__gamma": ["scale", 0.003, 0.01, 0.03, 0.1]},
-        "Random Forest": {"m__n_estimators": [150, 300, 500], "m__max_depth": [None, 4, 6, 8, 12],
-                          "m__min_samples_leaf": [1, 2, 4, 8], "m__max_features": ["sqrt", 0.3, 0.5, 1.0]},
-        "Extra Trees": {"m__n_estimators": [150, 300, 500], "m__max_depth": [None, 4, 6, 8, 12],
-                        "m__min_samples_leaf": [1, 2, 4, 8], "m__max_features": ["sqrt", 0.3, 0.5, 1.0]},
-        "Gradient Boosting": {"m__n_estimators": [100, 200, 300, 500], "m__learning_rate": [0.01, 0.03, 0.05, 0.1],
-                              "m__max_depth": [2, 3, 4], "m__subsample": [0.6, 0.8, 1.0],
-                              "m__min_samples_leaf": [1, 3, 5, 10]},
-        "HistGradientBoosting": {"m__learning_rate": [0.01, 0.03, 0.05, 0.1], "m__max_iter": [100, 200, 400],
-                                 "m__max_depth": [None, 3, 5], "m__min_samples_leaf": [5, 10, 20],
-                                 "m__l2_regularization": [0, 0.1, 1.0]},
-        "XGBoost": {"m__n_estimators": [200, 300, 500], "m__learning_rate": [0.01, 0.03, 0.05, 0.1],
-                    "m__max_depth": [2, 3, 4, 5], "m__subsample": [0.6, 0.8, 1.0],
-                    "m__colsample_bytree": [0.5, 0.8, 1.0]},
+        "SVR (RBF)": {
+            "m__C": np.logspace(-1, 2, 20),
+            "m__epsilon": [0.1, 0.3, 0.5, 1.0],
+            "m__gamma": ["scale", 0.003, 0.01, 0.03, 0.1],
+        },
+        "Random Forest": {
+            "m__n_estimators": [150, 300, 500],
+            "m__max_depth": [None, 4, 6, 8, 12],
+            "m__min_samples_leaf": [1, 2, 4, 8],
+            "m__max_features": ["sqrt", 0.3, 0.5, 1.0],
+        },
+        "Extra Trees": {
+            "m__n_estimators": [150, 300, 500],
+            "m__max_depth": [None, 4, 6, 8, 12],
+            "m__min_samples_leaf": [1, 2, 4, 8],
+            "m__max_features": ["sqrt", 0.3, 0.5, 1.0],
+        },
+        "Gradient Boosting": {
+            "m__n_estimators": [100, 200, 300, 500],
+            "m__learning_rate": [0.01, 0.03, 0.05, 0.1],
+            "m__max_depth": [2, 3, 4],
+            "m__subsample": [0.6, 0.8, 1.0],
+            "m__min_samples_leaf": [1, 3, 5, 10],
+        },
+        "HistGradientBoosting": {
+            "m__learning_rate": [0.01, 0.03, 0.05, 0.1],
+            "m__max_iter": [100, 200, 400],
+            "m__max_depth": [None, 3, 5],
+            "m__min_samples_leaf": [5, 10, 20],
+            "m__l2_regularization": [0, 0.1, 1.0],
+        },
+        "XGBoost": {
+            "m__n_estimators": [200, 300, 500],
+            "m__learning_rate": [0.01, 0.03, 0.05, 0.1],
+            "m__max_depth": [2, 3, 4, 5],
+            "m__subsample": [0.6, 0.8, 1.0],
+            "m__colsample_bytree": [0.5, 0.8, 1.0],
+        },
     }
     tunable = [m for m in bench["Model"] if m in param_spaces][:cfg["n_tune"]]
     tuned, tune_rows = {}, []
@@ -783,23 +785,27 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
         tuned[name] = search.best_estimator_
         tune_rows.append({
             "Model": name,
-            "CV RMSE (Tuned)": float(-search.best_score_),
-            "Parameter Terbaik": str({
+            "CV RMSE (tuned)": -search.best_score_,
+            "Best params": str({
                 k.replace("m__", ""): (round(v, 4) if isinstance(v, float) else v)
                 for k, v in search.best_params_.items()
             }),
         })
-    tune_df = pd.DataFrame(tune_rows).sort_values("CV RMSE (Tuned)").reset_index(drop=True)
+    tune_df = pd.DataFrame(tune_rows).sort_values("CV RMSE (tuned)").reset_index(drop=True)
     best_name = tune_df.loc[0, "Model"]
     best_model = tuned[best_name]
 
+    # 4) Evaluasi pada data train, test, baseline, dan benchmark G3=G2
     pred_train = np.clip(best_model.predict(X_train), 0, 20)
     pred_test = np.clip(best_model.predict(X_test), 0, 20)
-    rep = pd.DataFrame({
+    rep_dict = {
         "Train": regression_report(y_train, pred_train, X.shape[1]),
         "Test": regression_report(y_test, pred_test, X.shape[1]),
-        "Baseline (Test)": regression_report(y_test, np.full(len(y_test), y_train.mean()), X.shape[1]),
-    }).T
+        "Baseline Rata-rata (Test)": regression_report(y_test, np.full(len(y_test), y_train.mean()), X.shape[1]),
+    }
+    if use_prev_grades and "G2" in X_test.columns:
+        rep_dict["Benchmark G3 = G2 (Test)"] = regression_report(y_test, X_test["G2"].values, 1)
+    rep = pd.DataFrame(rep_dict).T
     resid = y_test.values - pred_test
 
     act_pass, pred_pass = (y_test >= PASS_THRESHOLD), (pred_test >= PASS_THRESHOLD)
@@ -807,12 +813,12 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
     fn = int(((~act_pass) & pred_pass).sum())
     fp = int((act_pass & (~pred_pass)).sum())
     tn = int((act_pass & pred_pass).sum())
-    risk = {
-        "tp": tp, "fn": fn, "fp": fp, "tn": tn,
-        "recall": tp / max(tp + fn, 1),
-        "precision": tp / max(tp + fp, 1),
-    }
+    rec = tp / max(tp + fn, 1)
+    prec = tp / max(tp + fp, 1)
+    f1 = 2 * prec * rec / max(prec + rec, 1e-9)
+    risk = {"tp": tp, "fn": fn, "fp": fp, "tn": tn, "recall": rec, "precision": prec, "f1": f1}
 
+    # Learning curve (mode Lengkap)
     lc_data = None
     if cfg["learning_curve"]:
         sizes, tr_s, va_s = learning_curve(
@@ -820,8 +826,13 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
             scoring="neg_root_mean_squared_error",
             train_sizes=np.linspace(0.2, 1.0, 6), random_state=RANDOM_STATE,
         )
-        lc_data = {"sizes": sizes.tolist(), "train_rmse": (-tr_s.mean(1)).tolist(), "val_rmse": (-va_s.mean(1)).tolist()}
+        lc_data = {
+            "sizes": sizes.tolist(),
+            "train_rmse": (-tr_s.mean(1)).tolist(),
+            "val_rmse": (-va_s.mean(1)).tolist(),
+        }
 
+    # 5) Interpretasi: permutation importance, PDP numerik, koefisien
     perm = permutation_importance(
         best_model, X_test, y_test, n_repeats=cfg["perm_repeats"],
         random_state=RANDOM_STATE, scoring="neg_root_mean_squared_error", n_jobs=-1,
@@ -830,21 +841,21 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
         pd.DataFrame({
             "Fitur": X.columns,
             "Label": [LABELS.get(c, c) for c in X.columns],
-            "Kenaikan RMSE": perm.importances_mean,
+            "Kenaikan RMSE bila diacak": perm.importances_mean,
             "Std": perm.importances_std,
         })
-        .sort_values("Kenaikan RMSE", ascending=False)
+        .sort_values("Kenaikan RMSE bila diacak", ascending=False)
         .reset_index(drop=True)
     )
 
     top_num = [f for f in imp["Fitur"] if f in num_cols][:3]
-    pdp_data = []
-    for f in top_num:
+    pdp_data = {}
+    for feat in top_num:
         try:
-            pd_res = partial_dependence(best_model, X_train, [f], grid_resolution=20)
-            grid_vals = pd_res["grid_values"][0] if "grid_values" in pd_res else pd_res["values"][0]
-            avg_vals = pd_res["average"][0]
-            pdp_data.append({"feature": f, "label": LABELS.get(f, f), "grid": grid_vals.tolist(), "avg": avg_vals.tolist()})
+            pdp_res = partial_dependence(best_model, X_train, features=[feat], grid_resolution=20)
+            grid = pdp_res.get("grid_values", pdp_res.get("values"))[0]
+            avg = pdp_res["average"][0]
+            pdp_data[feat] = {"grid": np.asarray(grid, dtype=float), "avg": np.asarray(avg, dtype=float)}
         except Exception:
             pass
 
@@ -856,15 +867,20 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
 
     mask0 = y_test.values == 0
     mae_zero = float(np.abs(resid[mask0]).mean()) if mask0.sum() else None
+    rmse_zero = float(np.sqrt(np.mean(resid[mask0] ** 2))) if mask0.sum() else None
     mae_other = float(np.abs(resid[~mask0]).mean()) if (~mask0).sum() else None
+    rmse_other = float(np.sqrt(np.mean(resid[~mask0] ** 2))) if (~mask0).sum() else None
 
     schema = {
         "model_name": best_name,
         "target": TARGET,
         "use_prev_grades": bool(use_prev_grades),
-        "include_absences": bool(include_absences),
+        "exclude_absences": bool(exclude_absences),
         "feature_order": X.columns.tolist(),
-        "numeric": {c: {"min": float(X[c].min()), "max": float(X[c].max()), "median": float(X[c].median())} for c in num_cols},
+        "numeric": {
+            c: {"min": float(X[c].min()), "max": float(X[c].max()), "median": float(X[c].median())}
+            for c in num_cols
+        },
         "categorical": {c: sorted(X[c].dropna().unique().tolist()) for c in cat_cols},
         "metrics_test": {k: float(v) for k, v in rep.loc["Test"].items()},
         "top_features": imp.head(10)["Fitur"].tolist(),
@@ -872,11 +888,13 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
     }
     return dict(
         model=best_model, schema=schema, bench=bench, tune=tune_df, report=rep, importance=imp,
-        risk=risk, coef=coef, y_test=y_test.values, pred_test=pred_test, resid=resid,
-        lc_data=lc_data, pdp_data=pdp_data, n_train=len(X_train), n_test=len(X_test),
-        n_features=X.shape[1], num_cols=num_cols, cat_cols=cat_cols,
-        mae_zero=mae_zero, mae_other=mae_other, tunable=tunable,
-        gap_r2=float(rep.loc["Train", "R2"] - rep.loc["Test", "R2"]),
+        risk=risk, coef=coef, pdp_data=pdp_data, lc_data=lc_data,
+        y_test=y_test.values, pred_test=pred_test, resid=resid,
+        n_train=len(X_train), n_test=len(X_test), n_features=X.shape[1],
+        num_cols=num_cols, cat_cols=cat_cols,
+        mae_zero=mae_zero, rmse_zero=rmse_zero, mae_other=mae_other, rmse_other=rmse_other,
+        n_test_zero=int(mask0.sum()), n_test_other=int((~mask0).sum()),
+        tunable=tunable, gap_r2=float(rep.loc["Train", "R2"] - rep.loc["Test", "R2"]),
     )
 
 
@@ -884,15 +902,10 @@ def train_regression(_df, data_key, use_prev_grades, include_absences, mode):
 #  BAGIAN D - PELATIHAN MODEL CLUSTERING (DI-CACHE)
 # =============================================================================
 @st.cache_resource(show_spinner=False)
-def train_clustering(_df, data_key, include_grades, include_absences, min_k_final, mode):
+def train_clustering(_df, data_key, include_grades, min_k_final, mode):
     cfg = MODE_CFG[mode]
-    drop_cols = []
-    if not include_grades:
-        drop_cols += ["G1", "G2", "G3"]
-    if not include_absences and "absences" in _df.columns:
-        drop_cols.append("absences")
-
-    feat_df = _df.drop(columns=drop_cols).copy()
+    grade_cols = ["G1", "G2", "G3"]
+    feat_df = (_df if include_grades else _df.drop(columns=grade_cols)).copy()
     num_cols, cat_cols = split_columns(feat_df)
     feat_df[num_cols] = feat_df[num_cols].astype(float)
 
@@ -903,6 +916,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
     Z_train = transformer.fit_transform(df_train)
     Z_test = transformer.transform(df_test)
 
+    # Pemilihan algoritma & k
     rows = []
     for k in range(2, 9):
         algos = {
@@ -915,8 +929,8 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
             m = eval_labels(Z_train, lab)
             m.update(
                 Algoritma=name, k=k,
-                inertia=float(mdl.inertia_) if name == "KMeans" else np.nan,
-                bic=float(mdl.bic(Z_train)) if name == "GMM" else np.nan,
+                inertia=mdl.inertia_ if name == "KMeans" else np.nan,
+                bic=mdl.bic(Z_train) if name == "GMM" else np.nan,
             )
             rows.append(m)
     sel = pd.DataFrame(rows)
@@ -926,6 +940,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
         + sel["davies"].rank(ascending=True)
     )
 
+    # DBSCAN (pembanding)
     nn = NearestNeighbors(n_neighbors=10).fit(Z_train)
     kdist = np.sort(nn.kneighbors(Z_train)[0][:, -1])
     db_rows = []
@@ -933,7 +948,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
         lab = DBSCAN(eps=eps, min_samples=10).fit_predict(Z_train)
         mask = lab != -1
         n_cl = len(set(lab[mask]))
-        sil = float(silhouette_score(Z_train[mask], lab[mask])) if n_cl >= 2 and mask.sum() > n_cl else np.nan
+        sil = silhouette_score(Z_train[mask], lab[mask]) if n_cl >= 2 and mask.sum() > n_cl else np.nan
         db_rows.append({
             "eps": round(float(eps), 3),
             "n_cluster": n_cl,
@@ -950,8 +965,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
         if algo == "KMeans":
             return KMeans(n_clusters=k, n_init=cfg["final_init"], random_state=RANDOM_STATE)
         return GaussianMixture(
-            n_components=k, covariance_type="diag",
-            n_init=max(cfg["gmm_init"], 5), random_state=RANDOM_STATE,
+            n_components=k, covariance_type="diag", n_init=max(cfg["gmm_init"], 5), random_state=RANDOM_STATE
         )
 
     final_model = build_model(best_algo, best_k).fit(Z_train)
@@ -960,7 +974,6 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
     lab_train = final_pipeline.predict(df_train)
     lab_test = final_pipeline.predict(df_test)
     ev = pd.DataFrame({"Train": eval_labels(Z_train, lab_train), "Test": eval_labels(Z_test, lab_test)}).T
-
     rng = np.random.RandomState(RANDOM_STATE)
     ari = []
     for _ in range(cfg["boot"]):
@@ -970,6 +983,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
     ari = np.array(ari)
     rand_sil = float(np.mean([silhouette_score(Z_train, rng.randint(0, best_k, len(Z_train))) for _ in range(10)]))
 
+    # Interpretasi: label diurutkan menurut rata-rata G3 (0 = terendah -> k-1 = tertinggi)
     df_all = _df.copy()
     Z_all = transformer.transform(feat_df)
     df_all["cluster"] = final_pipeline.predict(feat_df)
@@ -985,6 +999,7 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
     prof_cols = _df.select_dtypes(include=np.number).columns.tolist()
     prof = df_all.groupby("cluster")[prof_cols].mean()
     z_prof = (prof - df_all[prof_cols].mean()) / df_all[prof_cols].std()
+    pass_rates = df_all.groupby("cluster")["G3"].apply(lambda s: float((s >= PASS_THRESHOLD).mean()))
 
     cat_report = []
     for c in cat_cols:
@@ -993,8 +1008,9 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
         for cl in ct.index:
             for cat in ct.columns:
                 cat_report.append({
-                    "cluster": cl, "fitur": LABELS.get(c, c), "kategori": VALUE_LABELS.get(c, {}).get(cat, str(cat)),
-                    "proporsi_cluster": ct.loc[cl, cat], "proporsi_populasi": overall[cat],
+                    "cluster": cl, "fitur": c, "kategori": cat,
+                    "proporsi_cluster": ct.loc[cl, cat],
+                    "proporsi_populasi": overall[cat],
                     "lift": ct.loc[cl, cat] / overall[cat],
                 })
     cat_report = pd.DataFrame(cat_report)
@@ -1017,21 +1033,23 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
         if z.get("absences", 0) > 0.5:
             traits.append("absen tinggi")
         if z.get("studytime", 0) > 0.5:
-            traits.append("waktu belajar tinggi")
+            traits.append("belajar rajin")
         if z.get("Dalc", 0) + z.get("Walc", 0) > 1.0:
             traits.append("konsumsi alkohol tinggi")
         if z.get("goout", 0) > 0.5:
             traits.append("sosialisasi tinggi")
-        return " · ".join(traits)
+        return ", ".join(traits)
 
     cluster_names = {int(cl): f"Cluster {cl} — {label_cluster(cl)}" for cl in prof.index}
     schema = {
         "algorithm": best_algo,
         "k": best_k,
         "include_grades": bool(include_grades),
-        "include_absences": bool(include_absences),
         "feature_order": feat_df.columns.tolist(),
-        "numeric": {c: {"min": float(feat_df[c].min()), "max": float(feat_df[c].max()), "median": float(feat_df[c].median())} for c in num_cols},
+        "numeric": {
+            c: {"min": float(feat_df[c].min()), "max": float(feat_df[c].max()), "median": float(feat_df[c].median())}
+            for c in num_cols
+        },
         "categorical": {c: sorted(feat_df[c].dropna().unique().tolist()) for c in cat_cols},
         "label_map": {int(k): int(v) for k, v in remap.items()},
         "cluster_names": cluster_names,
@@ -1046,27 +1064,27 @@ def train_clustering(_df, data_key, include_grades, include_absences, min_k_fina
     }
     return dict(
         model=final_pipeline, schema=schema, sel=sel, dbscan=dbscan_df, ev=ev, ari=ari,
-        rand_sil=rand_sil, df_all=df_all, prof=prof, z_prof=z_prof, size=size, notable=notable,
-        kruskal_H=float(H), kruskal_p=float(p), P2=P2, pca2_var=pca2.explained_variance_ratio_.tolist(),
-        sample_sil=sample_sil, n_train=len(df_train), n_test=len(df_test),
-        n_pc=Z_train.shape[1], var_pc=float(transformer.named_steps["pca"].explained_variance_ratio_.sum()),
+        rand_sil=rand_sil, df_all=df_all, prof=prof, z_prof=z_prof, pass_rates=pass_rates,
+        size=size, notable=notable, kruskal_H=float(H), kruskal_p=float(p),
+        P2=P2, pca2_var=pca2.explained_variance_ratio_.tolist(), sample_sil=sample_sil,
+        n_train=len(df_train), n_test=len(df_test), n_pc=Z_train.shape[1],
+        var_pc=float(transformer.named_steps["pca"].explained_variance_ratio_.sum()),
     )
 
 
 # =============================================================================
-#  BAGIAN E - FUNGSI BANTU APLIKASI & PRESET
+#  BAGIAN E - FUNGSI BANTU APLIKASI & FORM SIDEBAR
 # =============================================================================
 def is_whole(x) -> bool:
     return float(x).is_integer()
 
 
-def merged_input_specs(reg_schema: dict, clu_schema: dict):
-    """Gabungkan fitur input dari regresi & clustering, KECUALI target G3."""
+def merged_feature_specs(schemas):
     numeric, categorical, order = {}, {}, []
-    for sch in (reg_schema, clu_schema):
+    for sch in schemas:
         for c in sch["feature_order"]:
             if c == TARGET:
-                continue
+                continue  # G3 tidak masuk form input prediksi utama
             if c not in order:
                 order.append(c)
         for c, v in sch["numeric"].items():
@@ -1078,44 +1096,107 @@ def merged_input_specs(reg_schema: dict, clu_schema: dict):
     return order, numeric, categorical
 
 
-def compute_default_profile(df: pd.DataFrame, order, numeric, categorical) -> dict:
-    prof = {}
-    for c in order:
-        if c in numeric:
-            v = numeric[c]
-            med = v["median"]
-            prof[c] = int(round(med)) if (is_whole(v["min"]) and is_whole(v["max"])) else float(med)
+def compute_default_inputs(df: pd.DataFrame, order, numeric, categorical) -> dict:
+    defaults = {}
+    for col in order:
+        if col in numeric:
+            v = numeric[col]
+            lo, hi, med = v["min"], v["max"], v["median"]
+            if is_whole(lo) and is_whole(hi):
+                defaults[col] = int(min(max(round(med), int(lo)), int(hi)))
+            else:
+                defaults[col] = float(med)
+        elif col in categorical:
+            opts = categorical[col]
+            mode_val = df[col].mode().iloc[0] if col in df.columns and not df[col].mode().empty else opts[0]
+            defaults[col] = mode_val if mode_val in opts else opts[0]
+    return defaults
+
+
+def apply_preset_callback(preset_values: dict, defaults: dict, numeric: dict, categorical: dict):
+    merged = dict(defaults)
+    merged.update(preset_values)
+    for col, val in merged.items():
+        key = f"in_{col}"
+        if col in numeric:
+            v = numeric[col]
+            lo, hi = v["min"], v["max"]
+            if is_whole(lo) and is_whole(hi):
+                st.session_state[key] = int(min(max(round(float(val)), int(lo)), int(hi)))
+            else:
+                st.session_state[key] = float(min(max(float(val), lo), hi))
+        elif col in categorical:
+            if val in categorical[col]:
+                st.session_state[key] = val
+
+
+def ensure_session_inputs(defaults: dict, numeric: dict, categorical: dict):
+    for col, def_val in defaults.items():
+        key = f"in_{col}"
+        if key not in st.session_state:
+            st.session_state[key] = def_val
         else:
-            mode_val = df[c].mode().iloc[0] if c in df.columns and not df[c].mode().empty else categorical[c][0]
-            prof[c] = mode_val if mode_val in categorical[c] else categorical[c][0]
-    return prof
+            cur = st.session_state[key]
+            if col in numeric:
+                v = numeric[col]
+                lo, hi = v["min"], v["max"]
+                if is_whole(lo) and is_whole(hi):
+                    st.session_state[key] = int(min(max(round(float(cur)), int(lo)), int(hi)))
+                else:
+                    st.session_state[key] = float(min(max(float(cur), lo), hi))
+            elif col in categorical and cur not in categorical[col]:
+                st.session_state[key] = def_val
 
 
-def build_presets(base_profile: dict, order: list) -> dict:
-    def apply_overrides(overrides: dict) -> dict:
-        p = base_profile.copy()
-        for k, v in overrides.items():
-            if k in order:
-                p[k] = v
-        return p
+def render_input_form(order, numeric, categorical) -> dict:
+    inputs, placed = {}, set()
 
-    return {
-        "Rata-rata Kelas": base_profile.copy(),
-        "Siswa Berprestasi": apply_overrides({
-            "G1": 16, "G2": 17, "failures": 0, "studytime": 3, "higher": "yes",
-            "schoolsup": "no", "famsup": "yes", "paid": "yes", "goout": 2,
-            "Dalc": 1, "Walc": 1, "Medu": 4, "Fedu": 4, "absences": 2,
-        }),
-        "Siswa Perlu Pendampingan": apply_overrides({
-            "G1": 7, "G2": 6, "failures": 2, "studytime": 1, "higher": "no",
-            "schoolsup": "yes", "famsup": "no", "paid": "no", "goout": 4,
-            "Dalc": 3, "Walc": 4, "Medu": 1, "Fedu": 1, "absences": 14,
-        }),
-        "Siswa Menengah (Batas Lulus)": apply_overrides({
-            "G1": 10, "G2": 10, "failures": 1, "studytime": 2, "higher": "yes",
-            "schoolsup": "no", "famsup": "yes", "goout": 3, "absences": 6,
-        }),
-    }
+    def widget(col):
+        label, help_txt = LABELS.get(col, col), HELP.get(col)
+        key = f"in_{col}"
+        if col in numeric:
+            v = numeric[col]
+            lo, hi = v["min"], v["max"]
+            if col in ORDINAL_LABELS and is_whole(lo) and is_whole(hi):
+                opts = list(range(int(lo), int(hi) + 1))
+                ord_map = ORDINAL_LABELS[col]
+                return st.select_slider(
+                    label, options=opts, key=key, help=help_txt,
+                    format_func=lambda x, m=ord_map: m.get(int(x), str(x)),
+                )
+            if is_whole(lo) and is_whole(hi):
+                lo_i, hi_i = int(lo), max(int(hi), int(lo) + 1)
+                return st.slider(label, lo_i, hi_i, key=key, help=help_txt)
+            hi_f = float(hi) if hi > lo else float(lo) + 1.0
+            return st.slider(label, float(lo), hi_f, key=key, help=help_txt)
+
+        opts = categorical[col]
+        fmt = VALUE_LABELS.get(col, {})
+        if col in BINARY_YES_NO and len(opts) == 2:
+            return st.radio(
+                label, opts, key=key, help=help_txt, horizontal=True,
+                format_func=lambda x, f=fmt: f.get(x, str(x)),
+            )
+        return st.selectbox(
+            label, opts, key=key, help=help_txt,
+            format_func=lambda x, f=fmt: f.get(x, str(x)),
+        )
+
+    for gname, cols in SIDEBAR_GROUPS.items():
+        present = [c for c in cols if c in order]
+        if not present:
+            continue
+        with st.expander(gname, expanded=(gname.startswith("⭐"))):
+            for c in present:
+                inputs[c] = widget(c)
+                placed.add(c)
+
+    rest = [c for c in order if c not in placed]
+    if rest:
+        with st.expander("📌 Fitur Lainnya", expanded=False):
+            for c in rest:
+                inputs[c] = widget(c)
+    return inputs
 
 
 def to_frame(values: dict, feature_order, numeric_cols) -> pd.DataFrame:
@@ -1148,443 +1229,386 @@ def model_bytes(model) -> bytes:
     return buf.getvalue()
 
 
-def render_feature_widget(col: str, numeric: dict, categorical: dict, current_val):
-    label = LABELS.get(col, col)
-    help_txt = HELP.get(col)
+def generate_student_insights(inputs: dict, pred: float, thr: float, use_prev: bool) -> tuple[str, str, list[str]]:
+    notes = []
+    if pred < thr:
+        tone = "rose"
+        title = "Perlu Intervensi Dini — Prediksi di Bawah Batas Lulus (< 10)"
+    elif pred < thr + 2.0:
+        tone = "amber"
+        title = "Zona Waspada — Prediksi Mendekati Batas Lulus (10–12)"
+    else:
+        tone = "emerald"
+        title = "Performa Aman — Prediksi di Atas Batas Lulus (≥ 12)"
 
-    if col in ORDINAL_LABELS and col in numeric:
-        ord_map = ORDINAL_LABELS[col]
-        lo, hi = int(numeric[col]["min"]), int(numeric[col]["max"])
-        opts = [k for k in sorted(ord_map.keys()) if lo <= k <= hi]
-        if not opts:
-            opts = sorted(ord_map.keys())
-        cur = int(round(current_val)) if current_val in opts else opts[min(len(opts) // 2, len(opts) - 1)]
-        idx = opts.index(cur)
-        return st.selectbox(
-            label, opts, index=idx, help=help_txt,
-            format_func=lambda x, m=ord_map: m.get(x, str(x)),
-        )
+    if use_prev and "G1" in inputs and "G2" in inputs:
+        g1, g2 = float(inputs["G1"]), float(inputs["G2"])
+        if g2 == 0:
+            notes.append("<strong>Nilai G2 = 0</strong>: Pada data historis, seluruh siswa dengan G2 = 0 berakhir dengan G3 = 0 (indikasi tidak mengikuti ujian / drop out). Verifikasi kehadiran & pendampingan segera sangat disarankan.")
+        elif g2 < g1 - 1.5:
+            notes.append(f"<strong>Tren nilai menurun</strong> dari G1 ({g1:g}) ke G2 ({g2:g}). Identifikasi materi semester kedua yang menjadi hambatan.")
+        elif g2 > g1 + 1.5:
+            notes.append(f"<strong>Tren nilai membaik</strong> dari G1 ({g1:g}) ke G2 ({g2:g}). Pertahankan ritme belajar saat ini.")
 
-    if col in numeric:
-        v = numeric[col]
-        lo, hi = v["min"], v["max"]
-        if is_whole(lo) and is_whole(hi):
-            lo_i, hi_i = int(lo), int(hi)
-            if hi_i <= lo_i:
-                hi_i = lo_i + 1
-            cur_i = int(min(max(round(float(current_val)), lo_i), hi_i))
-            return st.slider(label, lo_i, hi_i, cur_i, help=help_txt)
-        if hi <= lo:
-            hi = lo + 1.0
-        cur_f = float(min(max(float(current_val), lo), hi))
-        return st.slider(label, float(lo), float(hi), cur_f, help=help_txt)
+    if inputs.get("failures", 0) >= 1:
+        notes.append(f"<strong>Riwayat kegagalan kelas ({int(inputs['failures'])} kali)</strong> berkorelasi negatif kuat terhadap nilai akhir pada data historis.")
+    if inputs.get("studytime", 2) <= 1:
+        notes.append("<strong>Waktu belajar mingguan rendah (&lt;2 jam/minggu)</strong>. Menambah jadwal belajar terstruktur dapat membantu konsistensi pemahaman.")
+    if inputs.get("higher") == "no":
+        notes.append("<strong>Motivasi studi lanjut</strong>: Siswa yang tidak berencana kuliah secara historis memiliki rata-rata G3 jauh lebih rendah (6,8 vs 10,6).")
+    if inputs.get("goout", 3) >= 4:
+        notes.append("<strong>Intensitas keluar bersama teman tinggi</strong>; perhatikan keseimbangan waktu sosial dan persiapan ujian.")
+    if inputs.get("Dalc", 1) >= 3 or inputs.get("Walc", 1) >= 4:
+        notes.append("<strong>Konsumsi alkohol tinggi</strong> tercatat sebagai faktor gaya hidup yang berasosiasi dengan penurunan fokus akademik.")
+    if inputs.get("absences", 0) >= 15:
+        notes.append(f"<strong>Ketidakhadiran tinggi ({int(inputs['absences'])} hari)</strong> berpotensi membuat siswa tertinggal materi inti.")
 
-    opts = categorical[col]
-    fmt = VALUE_LABELS.get(col, {})
-    idx = opts.index(current_val) if current_val in opts else 0
-    return st.selectbox(
-        label, opts, index=idx, help=help_txt,
-        format_func=lambda x, f=fmt: f.get(x, str(x)),
-    )
+    if not notes:
+        notes.append("Profil belajar, riwayat akademik, dan gaya hidup siswa berada pada rentang yang mendukung capaian nilai stabil.")
+    notes.append("<em>Catatan metodologis: Seluruh indikator di atas merupakan pola asosiasi statistik dari data historis Portugal (2005–2006), bukan bukti sebab-akibat langsung.</em>")
+    return tone, title, notes
 
 
 # =============================================================================
-#  BAGIAN F - SIDEBAR: NAVIGASI & PENGATURAN MODEL
+#  BAGIAN F - SIDEBAR: PENGATURAN MODEL & PROFIL SISWA
 # =============================================================================
 with st.sidebar:
     st.markdown(
-        '<div class="sb-brand">'
-        '<div class="sb-kicker">Data Sains · Kelompok 2</div>'
-        '<div class="sb-title">Analisis Performa Matematika</div>'
-        "</div>",
+        """
+        <div class="sb-brand">
+            <div class="sb-brand-title">🎓 Student Math Analytics</div>
+            <div class="sb-brand-sub">Executive Dark ML Dashboard · UCI student-mat</div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
-    page = st.radio(
-        "Navigasi",
-        [
-            "Prediksi & Segmentasi",
-            "Prediksi Massal",
-            "Evaluasi Regresi",
-            "Evaluasi Clustering",
-            "Data, Unduhan & Tentang",
-        ],
-        label_visibility="collapsed",
-    )
-
-    st.markdown("<div style='height: 0.4rem'></div>", unsafe_allow_html=True)
-    with st.expander("Pengaturan Model", expanded=False):
+    with st.expander("⚙️ Pengaturan Model & Metodologi", expanded=False):
         with st.form("model_settings"):
-            f_prev = st.checkbox(
-                "Regresi: gunakan G1 & G2",
+            f_prev = st.toggle(
+                "Regresi: Gunakan nilai G1 & G2",
                 value=True,
-                help="Nonaktifkan untuk simulasi peringatan dini tanpa nilai periode sebelumnya.",
+                help="Nonaktifkan untuk skenario peringatan dini sebelum nilai periode 1 & 2 tersedia.",
             )
-            f_abs = st.checkbox(
-                "Sertakan fitur absences",
-                value=False,
-                help="Default nonaktif mengikuti keputusan cleaning (waktu pencatatan absences tidak terinci). Aktifkan untuk membandingkan performa model.",
-            )
-            f_inc = st.checkbox(
-                "Clustering: gunakan G1–G3",
+            f_no_abs = st.toggle(
+                "Regresi: Kecualikan fitur absences",
                 value=True,
-                help="Saat memprediksi siswa baru, G3 otomatis diisi dari hasil prediksi regresi.",
+                help="Sesuai catatan cleaning proyek: waktu pencatatan absences tidak terinci dan seluruh G3=0 memiliki absences=0 (risiko data leakage).",
+            )
+            f_inc = st.toggle(
+                "Clustering: Sertakan fitur G1–G3",
+                value=True,
+                help="Toggle penggunaan nilai (termasuk G3) pada model clustering. Nonaktifkan untuk segmentasi murni berbasis profil non-nilai.",
             )
             f_mink = st.slider(
-                "Clustering: k minimal", 2, 5, 3,
-                help="k = 2 hanya membagi siswa menjadi dua kelompok besar.",
+                "Clustering: k minimal model final", 2, 5, 3,
+                help="k = 2 cenderung hanya membelah siswa menjadi kelompok tinggi dan rendah.",
             )
             f_mode = st.radio(
-                "Mode pelatihan", ["Cepat", "Lengkap"], index=0,
-                help="Cepat cocok untuk demo/server gratis; Lengkap melakukan tuning lebih mendalam beserta learning curve.",
+                "Mode pelatihan", ["Cepat", "Lengkap"], index=0, horizontal=True,
+                help="Cepat: tuning ringan & cepat. Lengkap: evaluasi + learning curve menyeluruh.",
             )
-            st.form_submit_button("Terapkan & Latih Ulang", type="primary", use_container_width=True)
+            st.form_submit_button("🔄 Terapkan & Latih Ulang", width="stretch")
 
-    use_prev_grades, include_absences, include_grades, min_k_final, train_mode = (
-        f_prev, f_abs, f_inc, f_mink, f_mode,
+    use_prev_grades, exclude_absences, include_grades, min_k_final, train_mode = (
+        f_prev, f_no_abs, f_inc, f_mink, f_mode,
     )
 
-
 # =============================================================================
-#  BAGIAN G - PELATIHAN MODEL (OTOMATIS & DI-CACHE)
+#  BAGIAN G - PELATIHAN MODEL (OTOMATIS, DI-CACHE PER KONFIGURASI)
 # =============================================================================
-with st.spinner(f"Menyiapkan model regresi & clustering (mode {train_mode})..."):
-    RES_R = train_regression(df_raw, DATA_KEY, use_prev_grades, include_absences, train_mode)
-    RES_C = train_clustering(df_raw, DATA_KEY, include_grades, include_absences, min_k_final, train_mode)
+with st.spinner(f"Melatih & mengevaluasi model regresi (mode {train_mode})..."):
+    RES_R = train_regression(df_raw, DATA_KEY, use_prev_grades, exclude_absences, train_mode)
+with st.spinner(f"Melatih & mengevaluasi model clustering (mode {train_mode})..."):
+    RES_C = train_clustering(df_raw, DATA_KEY, include_grades, min_k_final, train_mode)
 
 reg_model, reg_schema = RES_R["model"], RES_R["schema"]
 clu_model, clu_schema = RES_C["model"], RES_C["schema"]
 
+# Siapkan form profil siswa di sidebar (dengan Preset & Reset)
+order, numeric_specs, categorical_specs = merged_feature_specs([reg_schema, clu_schema])
+default_inputs = compute_default_inputs(df_raw, order, numeric_specs, categorical_specs)
+ensure_session_inputs(default_inputs, numeric_specs, categorical_specs)
+
 with st.sidebar:
-    st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+    st.markdown("#### 👤 Profil Siswa")
+    st.caption("Pilih skenario cepat atau sesuaikan profil di bawah. Hasil diperbarui otomatis.")
+
+    p1, p2 = st.columns(2)
+    p1.button(
+        "🏆 Berprestasi", width="stretch",
+        on_click=apply_preset_callback,
+        args=(STUDENT_PRESETS["berprestasi"], default_inputs, numeric_specs, categorical_specs),
+    )
+    p2.button(
+        "📊 Median", width="stretch",
+        on_click=apply_preset_callback,
+        args=({}, default_inputs, numeric_specs, categorical_specs),
+    )
+    p3, p4 = st.columns(2)
+    p3.button(
+        "⚠️ Berisiko", width="stretch",
+        on_click=apply_preset_callback,
+        args=(STUDENT_PRESETS["berisiko"], default_inputs, numeric_specs, categorical_specs),
+    )
+    p4.button(
+        "🚨 Drop Out", width="stretch",
+        on_click=apply_preset_callback,
+        args=(STUDENT_PRESETS["dropout"], default_inputs, numeric_specs, categorical_specs),
+    )
+
+    user_inputs = render_input_form(order, numeric_specs, categorical_specs)
+
+    st.divider()
     rm = reg_schema["metrics_test"]
     cm = clu_schema["metrics"]
-    abs_txt = "Disertakan" if include_absences else "Dikecualikan (default)"
     st.markdown(
-        f'<div class="sb-status">'
-        f'<div class="sb-status-title">Ringkasan Model Aktif</div>'
-        f'<strong>Regresi:</strong> {reg_schema["model_name"]}<br>'
-        f'R² Test: <strong>{rm["R2"]:.3f}</strong> · RMSE: <strong>{rm["RMSE"]:.2f}</strong><br>'
-        f'<strong>Clustering:</strong> {clu_schema["algorithm"]} (k = {clu_schema["k"]})<br>'
-        f'Silhouette: <strong>{cm["silhouette_test"]:.3f}</strong> · ARI: <strong>{cm["stability_ari"]:.2f}</strong><br>'
-        f'<strong>Fitur absences:</strong> {abs_txt}'
-        f"</div>",
+        f"""
+        <div class="sb-status">
+            <strong>Model Aktif ({html.escape(train_mode)})</strong><br/>
+            • <strong>Regresi:</strong> {html.escape(reg_schema['model_name'])}<br/>
+            &nbsp;&nbsp;R² = {rm['R2']:.3f} · RMSE = {rm['RMSE']:.2f} · MAE = {rm['MAE']:.2f}<br/>
+            • <strong>Clustering:</strong> {html.escape(clu_schema['algorithm'])} (k = {clu_schema['k']})<br/>
+            &nbsp;&nbsp;Silhouette = {cm['silhouette_test']:.2f} · ARI = {cm['stability_ari']:.2f}
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 
+# Hitung prediksi regresi utama sekali untuk dipakai di Hero, Tab 1, dan Tab 2
+X_reg_row = to_frame(user_inputs, reg_schema["feature_order"], reg_schema["numeric"].keys())
+pred_g3_val = float(predict_g3(reg_model, X_reg_row)[0])
+
 # =============================================================================
-#  HERO HEADER (BERSIH & TIDAK PADAT)
+#  HERO BANNER & NAVIGASI TAB UTAMA
 # =============================================================================
+mode_chip = "Dengan G1 & G2" if use_prev_grades else "Mode Peringatan Dini (Tanpa G1/G2)"
+abs_chip = "Absences: Dikecualikan (Clean)" if exclude_absences else "Absences: Disertakan"
+clu_g3_chip = "Clustering: + G1–G3" if include_grades else "Clustering: Non-Nilai"
+
 st.markdown(
-    f'<div class="hero-box">'
-    f'<div class="hero-kicker">{COURSE_INFO}</div>'
-    f'<h1 class="hero-title">{APP_TITLE}</h1>'
-    f'<div class="hero-pills">'
-    f'<span class="pill pill-accent">Dataset: UCI Student Performance (Matematika, n = {len(df_raw)})</span>'
-    f'<span class="pill">Model Regresi: {reg_schema["model_name"]}</span>'
-    f'<span class="pill">Segmentasi: {clu_schema["algorithm"]} (k = {clu_schema["k"]})</span>'
-    f'<span class="pill">Fitur absences: {abs_txt}</span>'
-    f"</div>"
-    f"</div>",
+    f"""
+    <div class="hero-banner">
+        <div class="hero-kicker">Project Data Sains · Machine Learning &amp; Streamlit Analytics</div>
+        <div class="hero-title">Prediksi Nilai Akhir Matematika Siswa (G3)</div>
+        <div class="hero-subtitle">
+            Dashboard analitik terpadu untuk estimasi nilai akhir (regresi), simulasi what-if, segmentasi profil siswa (clustering), prediksi massal, dan evaluasi model end-to-end.
+        </div>
+        <div class="chip-row">
+            <span class="chip chip-cyan">📊 Dataset: {len(df_raw)} Siswa · {df_raw.shape[1]} Fitur</span>
+            <span class="chip chip-emerald">🤖 Regresi: {html.escape(reg_schema['model_name'])} (R² {rm['R2']:.2f})</span>
+            <span class="chip chip-indigo">🧩 {html.escape(clu_schema['algorithm'])} k={clu_schema['k']} · {clu_g3_chip}</span>
+            <span class="chip chip-amber">⚙️ {mode_chip}</span>
+            <span class="chip">🛡️ {abs_chip}</span>
+        </div>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
+tab_reg, tab_clu, tab_batch, tab_evr, tab_evc, tab_data = st.tabs([
+    "📈 Prediksi Nilai",
+    "🧩 Segmentasi Siswa",
+    "📂 Prediksi Massal",
+    "🔬 Evaluasi Regresi",
+    "🔬 Evaluasi Clustering",
+    "🗂️ Data, EDA & Unduhan",
+])
+
 
 # =============================================================================
-#  HALAMAN 1 — PREDIKSI & SEGMENTASI OTOMATIS
+#  TAB 1 - PREDIKSI NILAI (HERO TAB)
 # =============================================================================
-if page == "Prediksi & Segmentasi":
-    order, numeric_specs, categorical_specs = merged_input_specs(reg_schema, clu_schema)
-    default_profile = compute_default_profile(df_raw, order, numeric_specs, categorical_specs)
-    presets = build_presets(default_profile, order)
-
-    # Sinkronkan session state jika konfigurasi fitur berubah
-    cfg_sig = f"{DATA_KEY}-{use_prev_grades}-{include_absences}-{include_grades}"
-    if "active_profile" not in st.session_state or st.session_state.get("cfg_sig") != cfg_sig:
-        st.session_state["active_profile"] = default_profile.copy()
-        st.session_state["active_preset"] = "Rata-rata Kelas"
-        st.session_state["cfg_sig"] = cfg_sig
-
-    # Baris Preset & Mode Input
-    section_header(
-        "Langkah 1 · Profil Siswa",
-        "Masukkan Data Siswa atau Pilih Profil Contoh",
-        "Pilih preset untuk simulasi cepat, sesuaikan parameter di bawah, lalu klik tombol prediksi untuk melihat nilai akhir dan klaster otomatis.",
-    )
-
-    p_cols = st.columns(len(presets) + 1)
-    for idx, (pname, pvals) in enumerate(presets.items()):
-        is_sel = st.session_state.get("active_preset") == pname
-        if p_cols[idx].button(pname, type="primary" if is_sel else "secondary", use_container_width=True, key=f"preset_{idx}"):
-            st.session_state["active_profile"] = pvals.copy()
-            st.session_state["active_preset"] = pname
-            st.rerun()
-
-    with p_cols[-1]:
-        input_mode = st.radio(
-            "Tampilan Form",
-            ["Ringkas", "Lengkap"],
-            horizontal=True,
-            label_visibility="collapsed",
-            help="Ringkas menampilkan fitur paling berpengaruh; Lengkap menampilkan seluruh fitur yang digunakan model.",
-        )
-
-    cur_profile = st.session_state["active_profile"]
-
-    with st.form("student_profile_form"):
-        form_vals = cur_profile.copy()
-        if input_mode == "Ringkas":
-            shown = [c for c in COMPACT_FEATURES if c in order]
-            # Pastikan top features model ikut tampil jika belum ada
-            for tf in reg_schema["top_features"]:
-                if tf in order and tf not in shown and len(shown) < 12:
-                    shown.append(tf)
-            st.caption(
-                f"Menampilkan {len(shown)} fitur utama. {len(order) - len(shown)} fitur lainnya otomatis menggunakan nilai median/modus kelas."
-            )
-            cols_grid = st.columns(3)
-            for i, col in enumerate(shown):
-                with cols_grid[i % 3]:
-                    form_vals[col] = render_feature_widget(col, numeric_specs, categorical_specs, cur_profile.get(col, default_profile[col]))
-        else:
-            ftabs = st.tabs(list(GROUPS.keys()))
-            placed = set()
-            for tab_obj, (gname, gcols) in zip(ftabs, GROUPS.items()):
-                present = [c for c in gcols if c in order]
-                with tab_obj:
-                    if not present:
-                        st.caption("Tidak ada fitur aktif pada kelompok ini.")
-                    else:
-                        cols_grid = st.columns(3)
-                        for i, col in enumerate(present):
-                            with cols_grid[i % 3]:
-                                form_vals[col] = render_feature_widget(col, numeric_specs, categorical_specs, cur_profile.get(col, default_profile[col]))
-                            placed.add(col)
-            rest = [c for c in order if c not in placed]
-            if rest:
-                with st.expander("Fitur Tambahan"):
-                    cols_grid = st.columns(3)
-                    for i, col in enumerate(rest):
-                        with cols_grid[i % 3]:
-                            form_vals[col] = render_feature_widget(col, numeric_specs, categorical_specs, cur_profile.get(col, default_profile[col]))
-
-        st.markdown("<div style='height: 0.4rem'></div>", unsafe_allow_html=True)
-        btn_col1, btn_col2 = st.columns([3, 1])
-        submitted = btn_col1.form_submit_button("Prediksi Nilai & Klasterisasi Siswa", type="primary", use_container_width=True)
-        reset_btn = btn_col2.form_submit_button("Reset ke Rata-rata", use_container_width=True)
-
-    if reset_btn:
-        st.session_state["active_profile"] = default_profile.copy()
-        st.session_state["active_preset"] = "Rata-rata Kelas"
-        st.rerun()
-    elif submitted:
-        st.session_state["active_profile"] = form_vals
-        st.session_state["active_preset"] = "Kustom"
-        cur_profile = form_vals
-
-    # =========================================================================
-    #  LANGKAH 2 — HASIL PREDIKSI & SEGMENTASI OTOMATIS (SATU HALAMAN)
-    # =========================================================================
-    X_reg_row = to_frame(cur_profile, reg_schema["feature_order"], reg_schema["numeric"].keys())
-    pred_val = float(predict_g3(reg_model, X_reg_row)[0])
+with tab_reg:
     thr = reg_schema["pass_threshold"]
     rmse = reg_schema["metrics_test"]["RMSE"]
-    lo_b, hi_b = max(0.0, pred_val - rmse), min(20.0, pred_val + rmse)
+    mae = reg_schema["metrics_test"]["MAE"]
+    r2_val = reg_schema["metrics_test"]["R2"]
+    lo_b, hi_b = max(0.0, pred_g3_val - rmse), min(20.0, pred_g3_val + rmse)
     pop_mean = float(df_raw[TARGET].mean())
-    delta_mean = pred_val - pop_mean
-    is_risk = pred_val < thr
+    delta_mean = pred_g3_val - pop_mean
+    percentile = float((df_raw[TARGET] <= pred_g3_val).mean() * 100)
 
-    # Otomatis klasterisasi menggunakan hasil prediksi G3
-    clu_inputs = cur_profile.copy()
-    if TARGET in clu_schema["feature_order"]:
-        clu_inputs[TARGET] = pred_val
-    X_clu_row = to_frame(clu_inputs, clu_schema["feature_order"], clu_schema["numeric"].keys())
-    cl_id = int(predict_cluster(clu_model, clu_schema, X_clu_row)[0])
-    cl_names = clu_schema["cluster_names"]
-    cl_label = cl_names.get(cl_id, f"Cluster {cl_id}")
-    cl_short = cl_label.split(" — ")[0]
-    cl_desc = cl_label.split(" — ")[1] if " — " in cl_label else ""
+    if pred_g3_val < thr:
+        status_label, status_accent, gauge_color = "Berisiko", "rose", COLORS["rose"]
+        status_sub = f'<span class="delta-neg">{pred_g3_val - thr:+.1f} poin</span> dari batas lulus ({thr})'
+    elif pred_g3_val < thr + 2.0:
+        status_label, status_accent, gauge_color = "Waspada", "amber", COLORS["amber"]
+        status_sub = f'<span class="delta-neu">{pred_g3_val - thr:+.1f} poin</span> di atas batas lulus ({thr})'
+    else:
+        status_label, status_accent, gauge_color = "Aman · Lulus", "emerald", COLORS["emerald"]
+        status_sub = f'<span class="delta-pos">{pred_g3_val - thr:+.1f} poin</span> di atas batas lulus ({thr})'
 
-    st.markdown("<div style='height: 1.1rem'></div>", unsafe_allow_html=True)
-    section_header(
-        "Langkah 2 · Hasil Analisis Siswa",
-        "Prediksi Nilai Akhir (G3) & Segmentasi Profil Otomatis",
-        "Hasil prediksi regresi otomatis diteruskan ke model clustering untuk mengelompokkan profil siswa.",
-    )
+    # Baris 1: Gauge + 4 KPI Cards
+    col_gauge, col_kpis = st.columns([5, 7], gap="large")
 
-    g_col, k_col = st.columns([1.15, 1.85], gap="large")
-    with g_col:
-        gauge_color = COLORS["rose"] if is_risk else (COLORS["amber"] if pred_val < 14 else COLORS["emerald"])
-        fig_gauge = go.Figure(
-            go.Indicator(
-                mode="gauge+number+delta",
-                value=pred_val,
-                number={"suffix": " / 20", "font": {"size": 34, "color": COLORS["text"]}},
-                delta={
-                    "reference": pop_mean,
-                    "valueformat": "+.1f",
-                    "increasing": {"color": COLORS["emerald"]},
-                    "decreasing": {"color": COLORS["rose"]},
-                    "suffix": " vs rata-rata",
+    with col_gauge:
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=round(pred_g3_val, 2),
+            number={"suffix": " / 20", "font": {"size": 36, "color": "#F8FAFC", "family": "Inter"}},
+            delta={
+                "reference": round(pop_mean, 2),
+                "increasing": {"color": COLORS["emerald"]},
+                "decreasing": {"color": COLORS["rose"]},
+                "suffix": " vs rata-rata",
+                "font": {"size": 14},
+            },
+            title={"text": "Estimasi Nilai Akhir Matematika (G3)", "font": {"size": 14, "color": "#CBD5E1"}},
+            gauge={
+                "axis": {"range": [0, 20], "tickwidth": 1, "tickcolor": "#64748B", "dtick": 4},
+                "bar": {"color": gauge_color, "thickness": 0.30},
+                "bgcolor": "rgba(15, 23, 42, 0.7)",
+                "borderwidth": 1,
+                "bordercolor": "rgba(148, 163, 184, 0.2)",
+                "steps": [
+                    {"range": [0, 10], "color": "rgba(244, 63, 94, 0.16)"},
+                    {"range": [10, 14], "color": "rgba(56, 189, 248, 0.14)"},
+                    {"range": [14, 20], "color": "rgba(16, 185, 129, 0.16)"},
+                ],
+                "threshold": {
+                    "line": {"color": "#F8FAFC", "width": 3},
+                    "thickness": 0.85,
+                    "value": thr,
                 },
-                gauge={
-                    "axis": {"range": [0, 20], "tickwidth": 1, "tickcolor": COLORS["muted"], "dtick": 5},
-                    "bar": {"color": gauge_color, "thickness": 0.28},
-                    "bgcolor": "rgba(148,163,184,0.08)",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0, thr], "color": "rgba(244, 63, 94, 0.14)"},
-                        {"range": [thr, 14], "color": "rgba(245, 158, 11, 0.12)"},
-                        {"range": [14, 20], "color": "rgba(16, 185, 129, 0.14)"},
-                    ],
-                    "threshold": {
-                        "line": {"color": "#F8FAFC", "width": 2.5},
-                        "thickness": 0.8,
-                        "value": thr,
-                    },
-                },
-                title={"text": "Estimasi Nilai Akhir (Batas Lulus = 10)", "font": {"size": 13, "color": COLORS["muted"]}},
-            )
+            },
+        ))
+        fig_gauge.update_layout(
+            height=290,
+            paper_bgcolor="rgba(17, 24, 39, 0.82)",
+            font=dict(family="Inter, sans-serif", color="#E2E8F0"),
+            margin=dict(l=24, r=24, t=54, b=16),
         )
-        style_plotly(fig_gauge, height=275, margin=dict(l=24, r=24, t=42, b=10))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+        st.plotly_chart(fig_gauge, width="stretch", theme=None)
 
-    with k_col:
-        r1c1, r1c2 = st.columns(2)
-        with r1c1:
-            kpi_card("Prediksi Nilai Akhir (G3)", f"{pred_val:.1f} / 20", f"Selisih {delta_mean:+.1f} poin dari rata-rata ({pop_mean:.1f})")
-        with r1c2:
-            kpi_card("Rentang Estimasi (±1 RMSE)", f"{lo_b:.1f} – {hi_b:.1f}", f"RMSE test = {rmse:.2f} · R² = {reg_schema['metrics_test']['R2']:.2f}")
-
-        st.markdown("<div style='height: 0.7rem'></div>", unsafe_allow_html=True)
-        r2c1, r2c2 = st.columns(2)
-        with r2c1:
-            badge = (
-                '<span class="badge-risk">Berisiko (&lt; 10)</span>'
-                if is_risk
-                else '<span class="badge-safe">Aman (Lulus)</span>'
-            )
-            kpi_card("Status Kelulusan", "", f"Ambang batas kelulusan: {thr} / 20", badge_html=badge)
-        with r2c2:
-            cl_badge = f'<span class="badge-info">{cl_short}</span>'
-            kpi_card("Segmentasi Otomatis", "", cl_desc or f"Model {clu_schema['algorithm']} (k = {clu_schema['k']})", badge_html=cl_badge)
-
-        if is_risk:
-            st.markdown(
-                f'<div class="callout callout-risk"><strong>Perlu Pendampingan Awal:</strong> '
-                f'Prediksi nilai akhir ({pred_val:.1f}) berada di bawah batas kelulusan ({thr}). '
-                f'Disarankan evaluasi faktor akademik utama (nilai periode sebelumnya, riwayat gagal kelas, dan jam belajar mingguan).</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                f'<div class="callout callout-safe"><strong>Posisi Akademik Aman:</strong> '
-                f'Prediksi nilai akhir ({pred_val:.1f}) melampaui batas kelulusan ({thr}). '
-                f'Pertahankan konsistensi belajar; hasil ini adalah estimasi statistik, bukan kepastian nilai akhir.</div>',
-                unsafe_allow_html=True,
-            )
-
-    # Sub-tab Detail Hasil (Segmentasi Otomatis & Simulasi What-If)
-    res_tab1, res_tab2 = st.tabs(["Detail Segmentasi Otomatis", "Simulasi What-If"])
-
-    with res_tab1:
-        prof_df, df_all = RES_C["prof"], RES_C["df_all"]
-        cl_size = int(RES_C["size"].loc[cl_id])
-        cl_g3 = float(prof_df.loc[cl_id, "G3"])
-        auto_note = (
-            f"Nilai G3 untuk klasterisasi otomatis diisi dari prediksi regresi ({pred_val:.1f})."
-            if clu_schema["include_grades"]
-            else "Klasterisasi dilakukan hanya dari karakteristik non-nilai (tanpa G1–G3)."
+    with col_kpis:
+        k_r1_c1, k_r1_c2 = st.columns(2, gap="medium")
+        delta_cls = "delta-pos" if delta_mean >= 0 else "delta-neg"
+        k_r1_c1.markdown(
+            kpi_card(
+                "Prediksi Nilai Akhir (G3)",
+                f"{pred_g3_val:.1f} / 20",
+                f'<span class="{delta_cls}">{delta_mean:+.1f} poin</span> vs rata-rata kelas ({pop_mean:.1f})',
+                accent="cyan",
+            ),
+            unsafe_allow_html=True,
         )
-        st.markdown(
-            f'<div class="callout"><strong>{cl_label}</strong> · Anggota: <strong>{cl_size} siswa</strong> '
-            f'({cl_size / len(df_all):.1%} dari dataset) · Rata-rata G3 cluster: <strong>{cl_g3:.1f}</strong>.<br>'
-            f'<span style="color:#94A3B8; font-size:0.82rem;">{auto_note} Silhouette test = {clu_schema["metrics"]["silhouette_test"]:.2f} '
-            f'(baca segmentasi sebagai kecenderungan profil, bukan batas tegas).</span></div>',
+        k_r1_c2.markdown(
+            kpi_card("Status Risiko Akademik", status_label, status_sub, accent=status_accent),
             unsafe_allow_html=True,
         )
 
-        sc1, sc2 = st.columns([1.35, 1.0], gap="large")
-        with sc1:
-            # Radar / Bar Perbandingan Siswa vs Cluster vs Populasi (dinormalisasi 0–1)
-            radar_cols = [
-                c for c in ["G1", "G2", "G3", "studytime", "failures", "goout", "Medu", "famrel"]
-                if c in prof_df.columns and c in clu_inputs
-            ]
-            r_labels = [LABELS.get(c, c) for c in radar_cols]
-            mins = df_all[radar_cols].min()
-            maxs = df_all[radar_cols].max().replace(0, 1)
-            span = (maxs - mins).replace(0, 1)
+        st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
+        k_r2_c1, k_r2_c2 = st.columns(2, gap="medium")
+        k_r2_c1.markdown(
+            kpi_card(
+                "Rentang Perkiraan (±1 RMSE)",
+                f"{lo_b:.1f} – {hi_b:.1f}",
+                f"RMSE test: {rmse:.2f} · MAE test: {mae:.2f} · R²: {r2_val:.2f}",
+                accent="indigo",
+            ),
+            unsafe_allow_html=True,
+        )
+        k_r2_c2.markdown(
+            kpi_card(
+                "Posisi di Populasi",
+                f"Persentil ke-{percentile:.0f}",
+                f"Lebih tinggi/setara dengan {percentile:.0f}% dari {len(df_raw)} siswa",
+                accent="cyan",
+            ),
+            unsafe_allow_html=True,
+        )
 
-            v_stu = [(float(clu_inputs[c]) - mins[c]) / span[c] for c in radar_cols]
-            v_clu = [(float(prof_df.loc[cl_id, c]) - mins[c]) / span[c] for c in radar_cols]
-            v_all = [(float(df_all[c].mean()) - mins[c]) / span[c] for c in radar_cols]
+    # Ringkasan & rekomendasi kontekstual
+    tone, insight_title, insight_items = generate_student_insights(user_inputs, pred_g3_val, thr, use_prev_grades)
+    ul_html = "<ul>" + "".join(f"<li>{item}</li>" for item in insight_items) + "</ul>"
+    st.markdown(insight_box(insight_title, ul_html, tone=tone), unsafe_allow_html=True)
 
-            fig_rad = go.Figure()
-            fig_rad.add_trace(go.Scatterpolar(
-                r=v_stu + [v_stu[0]], theta=r_labels + [r_labels[0]], fill="toself",
-                name="Siswa Ini", line=dict(color=COLORS["sky"], width=2.5), fillcolor="rgba(56,189,248,0.18)",
+    # Baris 2: Tren Nilai Siswa & Posisi dalam Distribusi Populasi
+    v_left, v_right = st.columns(2, gap="large")
+
+    with v_left:
+        if use_prev_grades and "G1" in user_inputs and "G2" in user_inputs:
+            stages = ["Periode 1 (G1)", "Periode 2 (G2)", "Prediksi Akhir (G3)"]
+            student_scores = [float(user_inputs["G1"]), float(user_inputs["G2"]), pred_g3_val]
+            pop_scores = [float(df_raw["G1"].mean()), float(df_raw["G2"].mean()), pop_mean]
+
+            fig_traj = go.Figure()
+            fig_traj.add_trace(go.Scatter(
+                x=stages, y=pop_scores, mode="lines+markers",
+                name="Rata-rata Populasi",
+                line=dict(color="#64748B", width=2, dash="dot"),
+                marker=dict(size=7, color="#94A3B8"),
             ))
-            fig_rad.add_trace(go.Scatterpolar(
-                r=v_clu + [v_clu[0]], theta=r_labels + [r_labels[0]], fill="toself",
-                name=f"Rata-rata {cl_short}", line=dict(color=COLORS["primary_light"], width=2), fillcolor="rgba(99,102,241,0.14)",
+            fig_traj.add_trace(go.Scatter(
+                x=stages, y=student_scores, mode="lines+markers+text",
+                name="Siswa Ini",
+                line=dict(color=COLORS["cyan"], width=3.5),
+                marker=dict(size=11, color=gauge_color, line=dict(width=2, color="#F8FAFC")),
+                text=[f"{v:.1f}" for v in student_scores],
+                textposition="top center",
+                textfont=dict(color="#F8FAFC", size=12),
+                fill="tozeroy",
+                fillcolor="rgba(56, 189, 248, 0.10)",
             ))
-            fig_rad.add_trace(go.Scatterpolar(
-                r=v_all + [v_all[0]], theta=r_labels + [r_labels[0]],
-                name="Rata-rata Semua Siswa", line=dict(color=COLORS["muted"], width=1.5, dash="dot"),
-            ))
-            fig_rad.update_layout(
-                polar=dict(
-                    bgcolor="rgba(17,24,39,0.55)",
-                    radialaxis=dict(visible=True, range=[0, 1], showticklabels=False, gridcolor="rgba(148,163,184,0.16)"),
-                    angularaxis=dict(gridcolor="rgba(148,163,184,0.16)", tickfont=dict(size=11, color=COLORS["text"])),
-                )
+            fig_traj.add_hline(
+                y=thr, line_dash="dash", line_color=COLORS["rose"], opacity=0.8,
+                annotation_text=f"Batas Lulus ({thr})", annotation_position="bottom right",
+                annotation_font_color="#FDA4AF",
             )
-            style_plotly(fig_rad, height=360, title="Perbandingan Profil Ternormalisasi (Skala 0–1)")
-            st.plotly_chart(fig_rad, use_container_width=True)
+            style_plotly(fig_traj, "Lintasan Perkembangan Nilai (G1 → G2 → Prediksi G3)", height=340)
+            fig_traj.update_yaxes(range=[0, 21.5], title="Skala Nilai (0–20)")
+            st.plotly_chart(fig_traj, width="stretch", theme=None)
+        else:
+            # Mode peringatan dini (tanpa G1/G2): bandingkan fitur kunci siswa vs lulus/tidak lulus
+            cmp_feats = [c for c in ["failures", "studytime", "Medu", "Fedu", "goout", "famrel"] if c in user_inputs]
+            passed_df = df_raw[df_raw[TARGET] >= thr]
+            failed_df = df_raw[df_raw[TARGET] < thr]
+            fig_early = go.Figure()
+            lbls = [LABELS.get(c, c) for c in cmp_feats]
+            fig_early.add_trace(go.Bar(name="Siswa Ini", x=lbls, y=[float(user_inputs[c]) for c in cmp_feats], marker_color=COLORS["cyan"]))
+            fig_early.add_trace(go.Bar(name="Rata-rata Lulus (≥10)", x=lbls, y=[float(passed_df[c].mean()) for c in cmp_feats], marker_color=COLORS["emerald"]))
+            fig_early.add_trace(go.Bar(name="Rata-rata Berisiko (<10)", x=lbls, y=[float(failed_df[c].mean()) for c in cmp_feats], marker_color=COLORS["rose"]))
+            fig_early.update_layout(barmode="group")
+            style_plotly(fig_early, "Profil Siswa vs Rata-rata Kelompok Lulus & Berisiko (Mode Peringatan Dini)", height=340)
+            st.plotly_chart(fig_early, width="stretch", theme=None)
 
-        with sc2:
-            if hasattr(clu_model, "predict_proba"):
-                proba = clu_model.predict_proba(X_clu_row)[0]
-                lm = clu_schema["label_map"]
-                pr_items = sorted([(lm[i], float(p)) for i, p in enumerate(proba)], key=lambda x: x[0])
-                fig_pr = go.Figure(go.Bar(
-                    x=[f"Cluster {k}" for k, _ in pr_items],
-                    y=[v * 100 for _, v in pr_items],
-                    marker_color=[COLORS["primary"] if k == cl_id else "rgba(148,163,184,0.35)" for k, _ in pr_items],
-                    text=[f"{v:.1%}" for _, v in pr_items],
-                    textposition="outside",
-                ))
-                style_plotly(fig_pr, height=220, title="Probabilitas Keanggotaan Cluster (%)")
-                fig_pr.update_yaxes(range=[0, 112])
-                st.plotly_chart(fig_pr, use_container_width=True)
+    with v_right:
+        fig_dist = go.Figure()
+        fig_dist.add_trace(go.Histogram(
+            x=df_raw[TARGET], nbinsx=21, name="Populasi Siswa",
+            marker=dict(color="rgba(129, 140, 248, 0.55)", line=dict(color="rgba(148, 163, 184, 0.35)", width=1)),
+        ))
+        fig_dist.add_vline(
+            x=thr, line_dash="dash", line_color=COLORS["rose"], line_width=2,
+            annotation_text="Batas Lulus (10)", annotation_position="top left",
+            annotation_font_color="#FDA4AF",
+        )
+        fig_dist.add_vline(
+            x=pred_g3_val, line_dash="solid", line_color=COLORS["cyan"], line_width=3,
+            annotation_text=f"Prediksi: {pred_g3_val:.1f}", annotation_position="top right",
+            annotation_font_color="#7DD3FC",
+        )
+        style_plotly(fig_dist, "Posisi Prediksi terhadap Distribusi G3 Populasi (395 Siswa)", height=340, show_legend=False)
+        fig_dist.update_xaxes(title="Nilai Akhir (G3)", range=[-0.6, 20.6])
+        fig_dist.update_yaxes(title="Jumlah Siswa")
+        st.plotly_chart(fig_dist, width="stretch", theme=None)
 
-            key_cols = [
-                c for c in ["G1", "G2", "G3", "failures", "studytime", "absences", "goout", "Medu", "Fedu", "age"]
-                if c in prof_df.columns and c in clu_inputs
-            ]
-            cmp_df = pd.DataFrame(
-                {
-                    "Siswa Ini": [clu_inputs[c] for c in key_cols],
-                    f"Rata-rata {cl_short}": [prof_df.loc[cl_id, c] for c in key_cols],
-                    "Rata-rata Kelas": [df_all[c].mean() for c in key_cols],
-                },
-                index=[LABELS.get(c, c) for c in key_cols],
-            ).astype(float).round(2)
-            st.dataframe(cmp_df, use_container_width=True)
+    # Baris 3: Simulasi What-If Interaktif
+    section_heading("🎛️ Simulasi What-If Interaktif")
+    st.caption("Pilih satu fitur numerik/ordinal untuk disimulasikan sambil menahan fitur lainnya tetap sesuai profil sidebar.")
 
-        with st.expander("Lihat Profil Rata-rata Seluruh Cluster"):
-            prof_show = prof_df.copy()
-            prof_show.index = [cl_names.get(i, f"Cluster {i}") for i in prof_show.index]
-            prof_show.columns = [LABELS.get(c, c) for c in prof_show.columns]
-            st.dataframe(prof_show.T.round(2), use_container_width=True)
+    num_feats = [c for c in reg_schema["feature_order"] if c in reg_schema["numeric"]]
+    top_pref = [c for c in reg_schema["top_features"] if c in num_feats]
+    wf_options = top_pref + [c for c in num_feats if c not in top_pref]
 
-    with res_tab2:
-        st.caption("Ubah satu fitur sambil menahan fitur lain pada profil saat ini untuk mengamati sensitivitas prediksi G3.")
-        num_feats = [c for c in reg_schema["feature_order"] if c in reg_schema["numeric"]]
-        top_pref = [c for c in reg_schema["top_features"] if c in num_feats]
-        options = top_pref + [c for c in num_feats if c not in top_pref]
-        feat = st.selectbox("Pilih fitur yang disimulasikan", options, format_func=lambda c: LABELS.get(c, c))
+    wf_c1, wf_c2 = st.columns([4, 8], gap="large")
+    with wf_c1:
+        feat = st.selectbox(
+            "Fitur yang disimulasikan", wf_options,
+            format_func=lambda c: f"{LABELS.get(c, c)} ({c})",
+            key="whatif_feat",
+        )
         spec = reg_schema["numeric"][feat]
         if is_whole(spec["min"]) and is_whole(spec["max"]):
             grid = np.arange(int(spec["min"]), int(spec["max"]) + 1, dtype=float)
@@ -1593,564 +1617,763 @@ if page == "Prediksi & Segmentasi":
 
         X_var = X_reg_row.loc[X_reg_row.index.repeat(len(grid))].reset_index(drop=True)
         X_var[feat] = grid
-        preds_sim = predict_g3(reg_model, X_var)
-        cur_fval = float(cur_profile[feat])
+        sim_preds = predict_g3(reg_model, X_var)
+        best_idx = int(np.argmax(sim_preds))
+        best_val, best_pred = float(grid[best_idx]), float(sim_preds[best_idx])
+        cur_val = float(user_inputs[feat])
+        gain = best_pred - pred_g3_val
 
-        fig_sim = go.Figure()
-        fig_sim.add_trace(go.Scatter(
-            x=grid, y=preds_sim, mode="lines+markers",
-            name="Prediksi G3", line=dict(color=COLORS["sky"], width=3),
-            marker=dict(size=6, color=COLORS["primary_light"]),
-            hovertemplate=f"{LABELS.get(feat, feat)}: %{{x:g}}<br>Prediksi G3: %{{y:.2f}}<extra></extra>",
-        ))
-        fig_sim.add_hline(y=thr, line_dash="dash", line_color=COLORS["rose"], annotation_text="Batas Lulus (10)", annotation_position="bottom right")
-        fig_sim.add_vline(x=cur_fval, line_dash="dot", line_color=COLORS["emerald"], annotation_text=f"Saat ini ({cur_fval:g})", annotation_position="top right")
-        style_plotly(fig_sim, height=340, title=f"Sensitivitas Prediksi G3 terhadap {LABELS.get(feat, feat)}")
-        fig_sim.update_xaxes(title_text=LABELS.get(feat, feat))
-        fig_sim.update_yaxes(title_text="Prediksi G3 (0–20)", range=[0, 20.5])
-        st.plotly_chart(fig_sim, use_container_width=True)
-
-        best_val = grid[int(preds_sim.argmax())]
-        st.caption(
-            f"Dengan fitur lain tetap, prediksi tertinggi ({preds_sim.max():.1f}) dicapai saat "
-            f"{LABELS.get(feat, feat)} = {best_val:g}. Grafik ini mencerminkan asosiasi dalam model, bukan hubungan sebab-akibat."
+        fmt_val = (
+            ORDINAL_LABELS[feat].get(int(round(best_val)), f"{best_val:g}")
+            if feat in ORDINAL_LABELS else f"{best_val:g}"
+        )
+        fmt_cur = (
+            ORDINAL_LABELS[feat].get(int(round(cur_val)), f"{cur_val:g}")
+            if feat in ORDINAL_LABELS else f"{cur_val:g}"
         )
 
-
-# =============================================================================
-#  HALAMAN 2 — PREDIKSI MASSAL
-# =============================================================================
-elif page == "Prediksi Massal":
-    section_header(
-        "Pemrosesan Batch",
-        "Prediksi & Segmentasi Massal dari File CSV / Excel",
-        "Unggah data banyak siswa sekaligus untuk mendapatkan estimasi nilai akhir, status risiko, dan cluster secara otomatis.",
-    )
-
-    order, numeric_specs, categorical_specs = merged_input_specs(reg_schema, clu_schema)
-    default_profile = compute_default_profile(df_raw, order, numeric_specs, categorical_specs)
-    template = pd.DataFrame([default_profile])[order]
-
-    bc1, bc2 = st.columns([1, 2], gap="large")
-    with bc1:
         st.markdown(
-            '<div class="callout"><strong>Format Template:</strong><br>'
-            f'Template mencakup <strong>{len(order)} kolom fitur</strong> aktif tanpa kolom target G3. '
-            'Jika clustering menggunakan G1–G3, sistem otomatis mengisi G3 dari hasil prediksi regresi.</div>',
+            kpi_card(
+                "Potensi Prediksi Tertinggi",
+                f"{best_pred:.1f} / 20",
+                f"Saat <strong>{html.escape(LABELS.get(feat, feat))}</strong> = {html.escape(fmt_val)}<br/>"
+                f"Saat ini ({html.escape(fmt_cur)}): <strong>{pred_g3_val:.1f}</strong> "
+                f"(<span class='delta-pos'>{gain:+.1f} poin</span>)",
+                accent="emerald" if gain > 0.2 else "cyan",
+            ),
             unsafe_allow_html=True,
         )
-        st.download_button(
-            "Unduh Template CSV (1 Baris Contoh)",
-            template.to_csv(index=False).encode("utf-8"),
-            file_name="template_prediksi_siswa.csv",
-            mime="text/csv",
-            use_container_width=True,
+        st.caption("Hasil simulasi mencerminkan respons model terhadap pola data historis, bukan jaminan sebab-akibat.")
+
+    with wf_c2:
+        x_tick_labels = (
+            [ORDINAL_LABELS[feat].get(int(v), f"{v:g}") for v in grid]
+            if feat in ORDINAL_LABELS else None
         )
-    with bc2:
-        up = st.file_uploader("Unggah file data siswa (.csv atau .xlsx)", type=["csv", "xlsx"], key="upload_batch")
+        fig_wf = go.Figure()
+        fig_wf.add_trace(go.Scatter(
+            x=grid, y=sim_preds, mode="lines+markers",
+            name="Kurva Prediksi G3",
+            line=dict(color=COLORS["cyan"], width=3),
+            marker=dict(size=7, color=COLORS["cyan"]),
+            fill="tozeroy", fillcolor="rgba(56, 189, 248, 0.12)",
+            hovertemplate=f"{LABELS.get(feat, feat)}: %{{x}}<br>Prediksi G3: %{{y:.2f}}<extra></extra>",
+        ))
+        fig_wf.add_trace(go.Scatter(
+            x=[cur_val], y=[pred_g3_val], mode="markers",
+            name="Posisi Siswa Saat Ini",
+            marker=dict(size=14, color=COLORS["amber"], symbol="diamond", line=dict(width=2, color="#F8FAFC")),
+            hovertemplate="Saat ini: %{x}<br>Prediksi G3: %{y:.2f}<extra></extra>",
+        ))
+        fig_wf.add_hline(
+            y=thr, line_dash="dash", line_color=COLORS["rose"], opacity=0.75,
+            annotation_text=f"Batas Lulus ({thr})", annotation_position="bottom right",
+            annotation_font_color="#FDA4AF",
+        )
+        style_plotly(fig_wf, f"Sensitivitas Prediksi G3 terhadap {LABELS.get(feat, feat)}", height=330)
+        fig_wf.update_yaxes(title="Prediksi G3 (0–20)", range=[0, 21])
+        if x_tick_labels is not None:
+            fig_wf.update_xaxes(title=LABELS.get(feat, feat), tickmode="array", tickvals=grid, ticktext=x_tick_labels)
+        else:
+            fig_wf.update_xaxes(title=LABELS.get(feat, feat))
+        st.plotly_chart(fig_wf, width="stretch", theme=None)
 
-    if up is not None:
-        try:
-            df_up = pd.read_csv(up, sep=None, engine="python") if up.name.lower().endswith(".csv") else pd.read_excel(up)
-        except Exception as e:
-            st.error(f"File tidak dapat dibaca: {e}")
-            df_up = None
 
-        if df_up is not None and len(df_up) > 0:
-            result = df_up.copy()
-            miss_r = [c for c in reg_schema["feature_order"] if c not in df_up.columns]
-            if miss_r:
-                st.warning(f"Prediksi G3 dilewati karena kolom berikut hilang: {', '.join(miss_r)}")
-            else:
-                result["Prediksi_G3"] = predict_g3(reg_model, clean_batch(df_up, reg_schema)).round(2)
-                result["Status_Risiko"] = np.where(result["Prediksi_G3"] < reg_schema["pass_threshold"], "Berisiko", "Aman")
-
-            # Siapkan input clustering (isi G3 dari prediksi jika tidak tersedia di file unggahan)
-            df_clu_in = df_up.copy()
-            if TARGET in clu_schema["feature_order"] and TARGET not in df_clu_in.columns and "Prediksi_G3" in result.columns:
-                df_clu_in[TARGET] = result["Prediksi_G3"]
-
-            miss_c = [c for c in clu_schema["feature_order"] if c not in df_clu_in.columns]
-            if miss_c:
-                st.warning(f"Segmentasi dilewati karena kolom berikut hilang: {', '.join(miss_c)}")
-            else:
-                labs = predict_cluster(clu_model, clu_schema, clean_batch(df_clu_in, clu_schema))
-                result["Cluster"] = labs
-                result["Nama_Cluster"] = [clu_schema["cluster_names"].get(int(i), f"Cluster {i}") for i in labs]
-
-            # Ringkasan KPI Batch
-            st.markdown("<div style='height: 0.75rem'></div>", unsafe_allow_html=True)
-            m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                kpi_card("Total Siswa", f"{len(result)}", f"{df_up.shape[1]} kolom terbaca")
-            if "Prediksi_G3" in result:
-                n_risk = int((result["Status_Risiko"] == "Berisiko").sum())
-                n_safe = len(result) - n_risk
-                with m2:
-                    kpi_card("Rata-rata Prediksi G3", f"{result['Prediksi_G3'].mean():.2f}", f"Rentang {result['Prediksi_G3'].min():.1f} – {result['Prediksi_G3'].max():.1f}")
-                with m3:
-                    kpi_card("Siswa Berisiko", f"{n_risk}", f"{n_risk / len(result):.1%} di bawah batas lulus")
-                with m4:
-                    kpi_card("Siswa Aman", f"{n_safe}", f"{n_safe / len(result):.1%} di atas batas lulus")
-
-                ch1, ch2 = st.columns(2, gap="large")
-                with ch1:
-                    fig_bh = go.Figure(go.Histogram(x=result["Prediksi_G3"], nbinsx=20, marker_color=COLORS["primary"]))
-                    fig_bh.add_vline(x=PASS_THRESHOLD, line_dash="dash", line_color=COLORS["rose"], annotation_text="Batas Lulus (10)")
-                    style_plotly(fig_bh, height=300, title="Distribusi Prediksi G3")
-                    fig_bh.update_xaxes(title_text="Prediksi G3")
-                    fig_bh.update_yaxes(title_text="Jumlah Siswa")
-                    st.plotly_chart(fig_bh, use_container_width=True)
-                with ch2:
-                    fig_pie = go.Figure(go.Pie(
-                        labels=["Aman", "Berisiko"],
-                        values=[n_safe, n_risk],
-                        hole=0.55,
-                        marker=dict(colors=[COLORS["emerald"], COLORS["rose"]]),
-                    ))
-                    style_plotly(fig_pie, height=300, title="Proporsi Status Kelulusan")
-                    st.plotly_chart(fig_pie, use_container_width=True)
-
-            # Filter Tabel Hasil
-            f_col1, f_col2 = st.columns(2)
-            view_df = result.copy()
-            if "Status_Risiko" in view_df:
-                st_filter = f_col1.selectbox("Filter Status Risiko", ["Semua", "Berisiko", "Aman"])
-                if st_filter != "Semua":
-                    view_df = view_df[view_df["Status_Risiko"] == st_filter]
-            if "Nama_Cluster" in view_df:
-                cl_opts = ["Semua"] + sorted(view_df["Nama_Cluster"].unique().tolist())
-                cl_filter = f_col2.selectbox("Filter Cluster", cl_opts)
-                if cl_filter != "Semua":
-                    view_df = view_df[view_df["Nama_Cluster"] == cl_filter]
-
-            st.dataframe(view_df, use_container_width=True)
-            st.download_button(
-                "Unduh Hasil Prediksi & Segmentasi (CSV)",
-                result.to_csv(index=False).encode("utf-8"),
-                file_name="hasil_prediksi_siswa.csv",
-                mime="text/csv",
-                type="primary",
+# =============================================================================
+#  TAB 2 - SEGMENTASI SISWA
+# =============================================================================
+with tab_clu:
+    clu_inputs = dict(user_inputs)
+    if clu_schema["include_grades"]:
+        tg_col1, tg_col2 = st.columns([6, 6], gap="large")
+        with tg_col1:
+            use_manual_g3 = st.toggle(
+                "Gunakan nilai G3 aktual manual untuk clustering",
+                value=False,
+                key="toggle_manual_g3",
+                help="Nonaktif = otomatis menggunakan hasil prediksi G3 dari model regresi agar lebih praktis. Aktif = masukkan nilai G3 aktual siswa jika sudah diketahui.",
             )
+        with tg_col2:
+            if use_manual_g3:
+                manual_g3 = st.slider(
+                    "Nilai Akhir (G3) Aktual untuk Clustering", 0, 20, int(round(pred_g3_val)), key="manual_g3_val"
+                )
+                clu_inputs[TARGET] = float(manual_g3)
+                g3_source_txt = f"Menggunakan nilai G3 aktual manual = {manual_g3}"
+            else:
+                clu_inputs[TARGET] = round(pred_g3_val, 2)
+                g3_source_txt = f"Otomatis menggunakan hasil Prediksi G3 = {pred_g3_val:.1f}"
+    else:
+        g3_source_txt = "Mode segmentasi non-nilai (G1–G3 dinonaktifkan di Pengaturan Model)"
 
+    X_c = to_frame(clu_inputs, clu_schema["feature_order"], clu_schema["numeric"].keys())
+    cl = int(predict_cluster(clu_model, clu_schema, X_c)[0])
+    names = clu_schema["cluster_names"]
+    prof_df, df_all = RES_C["prof"], RES_C["df_all"]
+    cl_size = int(RES_C["size"].loc[cl])
+    cl_pct = cl_size / len(df_all) * 100
+    cl_g3 = float(prof_df.loc[cl, "G3"])
+    cl_pass = float(RES_C["pass_rates"].loc[cl] * 100)
+    mt = clu_schema["metrics"]
 
-# =============================================================================
-#  HALAMAN 3 — EVALUASI REGRESI
-# =============================================================================
-elif page == "Evaluasi Regresi":
-    R = RES_R
-    rep = R["report"]
-    r2_t, mae_t, rmse_t = rep.loc["Test", "R2"], rep.loc["Test", "MAE"], rep.loc["Test", "RMSE"]
-    acc2_t = rep.loc["Test", "Akurasi ±2 poin"]
-
-    section_header(
-        "Evaluasi Model Supervised",
-        "Performa & Diagnostik Model Regresi Nilai Akhir (G3)",
-        f"Split data: {R['n_train']} latih / {R['n_test']} uji (stratified kuantil G3) · {R['n_features']} fitur aktif.",
-    )
-
-    e1, e2, e3, e4, e5 = st.columns(5)
-    with e1:
-        kpi_card("Model Terbaik", R["schema"]["model_name"], "Dipilih via CV & tuning")
-    with e2:
-        kpi_card("Test R²", f"{r2_t:.3f}", f"Train R²: {rep.loc['Train', 'R2']:.3f}")
-    with e3:
-        kpi_card("Test RMSE", f"{rmse_t:.2f}", f"Baseline: {rep.loc['Baseline (Test)', 'RMSE']:.2f}")
-    with e4:
-        kpi_card("Test MAE", f"{mae_t:.2f}", f"MedAE: {rep.loc['Test', 'MedAE']:.2f}")
-    with e5:
-        kpi_card("Akurasi ±2 Poin", f"{acc2_t:.0%}", f"±1 poin: {rep.loc['Test', 'Akurasi ±1 poin']:.0%}")
-
-    top3 = [LABELS.get(f, f) for f in R["importance"]["Fitur"].head(3).tolist()]
-    overfit_txt = (
-        "indikasi overfitting — pertimbangkan regularisasi lebih kuat"
-        if R["gap_r2"] > 0.15
-        else "generalisasi stabil (tidak overfitting berat)"
-    )
-    zero_note = (
-        f"MAE pada siswa dengan G3 = 0: <strong>{R['mae_zero']:.2f}</strong> poin vs siswa lain: <strong>{R['mae_other']:.2f}</strong> poin. "
-        if R["mae_zero"] is not None and R["mae_other"] is not None
-        else ""
-    )
+    # Banner Cluster + 4 KPI Cards
+    cl_tone = "emerald" if cl_g3 >= 12 else ("amber" if cl_g3 >= 9.5 else "rose")
     st.markdown(
-        f'<div class="callout">'
-        f'<strong>Ringkasan Interpretasi:</strong> Model <strong>{R["schema"]["model_name"]}</strong> '
-        f'menjelaskan sekitar <strong>{r2_t:.1%}</strong> variasi nilai akhir pada data uji '
-        f'(selisih R² train–test = {R["gap_r2"]:.3f}, {overfit_txt}). '
-        f'Fitur paling berpengaruh: <strong>{", ".join(top3)}</strong>. {zero_note}'
-        f'</div>',
+        insight_box(
+            f"Hasil Segmentasi: {names.get(cl, f'Cluster {cl}')}",
+            f"Sumber fitur nilai: <strong>{html.escape(g3_source_txt)}</strong>.<br/>"
+            f"Model <strong>{html.escape(clu_schema['algorithm'])} (k = {clu_schema['k']})</strong> · "
+            f"Silhouette test = <strong>{mt['silhouette_test']:.2f}</strong> · Stabilitas ARI = <strong>{mt['stability_ari']:.2f}</strong>. "
+            "Pada data survei campuran dengan silhouette &lt; 0,25, segmentasi sebaiknya dibaca sebagai kecenderungan deskriptif, bukan batas kaku.",
+            tone=cl_tone,
+        ),
         unsafe_allow_html=True,
     )
 
-    rtab1, rtab2, rtab3 = st.tabs(["Perbandingan Algoritma & Tuning", "Diagnostik & Deteksi Risiko", "Interpretasi Fitur"])
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    c1.markdown(kpi_card("Cluster Terpilih", f"Cluster {cl}", html.escape(names.get(cl, "").split("—")[-1].strip()), accent="indigo"), unsafe_allow_html=True)
+    c2.markdown(kpi_card("Ukuran Cluster", f"{cl_size} siswa", f"{cl_pct:.1f}% dari total populasi", accent="cyan"), unsafe_allow_html=True)
+    c3.markdown(kpi_card("Rata-rata G3 Cluster", f"{cl_g3:.1f} / 20", f"Rata-rata populasi: {df_all['G3'].mean():.1f}", accent=cl_tone), unsafe_allow_html=True)
+    c4.markdown(kpi_card("Tingkat Lulus Cluster", f"{cl_pass:.0f}%", f"Persentase siswa dengan G3 ≥ {PASS_THRESHOLD}", accent="emerald" if cl_pass >= 70 else "amber"), unsafe_allow_html=True)
 
-    with rtab1:
-        st.markdown("**Ringkasan Metrik Train, Test, dan Baseline**")
-        st.dataframe(rep.round(3), use_container_width=True)
+    st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
+    ch1, ch2 = st.columns([5, 7], gap="large")
 
-        bench_sorted = R["bench"].sort_values("CV RMSE", ascending=False)
-        fig_bench = go.Figure(go.Bar(
-            y=bench_sorted["Model"],
-            x=bench_sorted["CV RMSE"],
-            orientation="h",
-            marker_color=[COLORS["primary"] if m == R["schema"]["model_name"] else "rgba(56,189,248,0.55)" for m in bench_sorted["Model"]],
-            text=[f"{v:.2f}" for v in bench_sorted["CV RMSE"]],
-            textposition="outside",
+    with ch1:
+        if hasattr(clu_model, "predict_proba"):
+            proba = clu_model.predict_proba(X_c)[0]
+            lm = clu_schema["label_map"]
+            pr = pd.Series({f"Cluster {lm[i]}": p * 100 for i, p in enumerate(proba)}).sort_index()
+            fig_pr = go.Figure(go.Bar(
+                x=pr.values, y=pr.index, orientation="h",
+                marker_color=[CLUSTER_PALETTE[i % len(CLUSTER_PALETTE)] for i in range(len(pr))],
+                text=[f"{v:.1f}%" for v in pr.values], textposition="outside",
+            ))
+            style_plotly(fig_pr, "Probabilitas Keanggotaan Cluster (GMM)", height=350, show_legend=False)
+            fig_pr.update_xaxes(title="Probabilitas (%)", range=[0, 112])
+            st.plotly_chart(fig_pr, width="stretch", theme=None)
+        else:
+            sizes_s = RES_C["size"].sort_index()
+            fig_sz = go.Figure(go.Pie(
+                labels=[f"Cluster {i}" for i in sizes_s.index],
+                values=sizes_s.values,
+                hole=0.52,
+                marker=dict(colors=[CLUSTER_PALETTE[i % len(CLUSTER_PALETTE)] for i in sizes_s.index],
+                            line=dict(color="#0B1120", width=2)),
+                textinfo="label+percent",
+                textfont=dict(color="#F8FAFC"),
+            ))
+            style_plotly(fig_sz, "Proporsi Jumlah Siswa per Cluster", height=350, show_legend=True)
+            st.plotly_chart(fig_sz, width="stretch", theme=None)
+
+    with ch2:
+        # Radar perbandingan (dinormalisasi 0-100% sesuai min-max dataset)
+        radar_cols = [c for c in ["G1", "G2", "G3", "studytime", "failures", "goout", "absences", "Medu"]
+                      if c in prof_df.columns and c in clu_inputs]
+        r_labels = [LABELS.get(c, c) for c in radar_cols]
+
+        def norm_vals(vals_dict):
+            out = []
+            for c in radar_cols:
+                lo_v, hi_v = float(df_all[c].min()), float(df_all[c].max())
+                span = max(hi_v - lo_v, 1e-6)
+                out.append((float(vals_dict[c]) - lo_v) / span * 100)
+            return out
+
+        stu_r = norm_vals(clu_inputs)
+        clu_r = norm_vals(prof_df.loc[cl].to_dict())
+        pop_r = norm_vals(df_all[radar_cols].mean().to_dict())
+
+        fig_rad = go.Figure()
+        fig_rad.add_trace(go.Scatterpolar(
+            r=pop_r + [pop_r[0]], theta=r_labels + [r_labels[0]],
+            name="Rata-rata Populasi", line=dict(color="#64748B", dash="dot", width=2),
         ))
-        style_plotly(fig_bench, height=400, title="Perbandingan Algoritma pada Cross-Validation (CV RMSE — Lebih Kecil Lebih Baik)")
-        fig_bench.update_xaxes(title_text="CV RMSE")
-        st.plotly_chart(fig_bench, use_container_width=True)
+        fig_rad.add_trace(go.Scatterpolar(
+            r=clu_r + [clu_r[0]], theta=r_labels + [r_labels[0]],
+            name=f"Rata-rata Cluster {cl}", fill="toself",
+            fillcolor="rgba(129, 140, 248, 0.18)", line=dict(color=COLORS["indigo"], width=2.5),
+        ))
+        fig_rad.add_trace(go.Scatterpolar(
+            r=stu_r + [stu_r[0]], theta=r_labels + [r_labels[0]],
+            name="Siswa Ini", fill="toself",
+            fillcolor="rgba(56, 189, 248, 0.22)", line=dict(color=COLORS["cyan"], width=3),
+        ))
+        fig_rad.update_layout(
+            polar=dict(
+                bgcolor="rgba(15, 23, 42, 0.55)",
+                radialaxis=dict(visible=True, range=[0, 100], gridcolor="rgba(148,163,184,0.16)", tickfont=dict(size=10, color="#94A3B8")),
+                angularaxis=dict(gridcolor="rgba(148,163,184,0.16)", tickfont=dict(size=11, color="#E2E8F0")),
+            ),
+        )
+        style_plotly(fig_rad, f"Radar Profil Siswa vs Cluster {cl} (Skala Relatif 0–100%)", height=350)
+        st.plotly_chart(fig_rad, width="stretch", theme=None)
 
-        c_b1, c_b2 = st.columns(2, gap="large")
-        with c_b1:
-            st.markdown("**Tabel Benchmark Cross-Validation**")
-            st.dataframe(R["bench"].round(3), use_container_width=True)
-        with c_b2:
-            st.markdown(f"**Hasil Hyperparameter Tuning ({', '.join(R['tunable'])})**")
-            st.dataframe(R["tune"].round(3), use_container_width=True)
+    section_heading("📋 Perbandingan Detail & Ringkasan Seluruh Cluster")
+    t_left, t_right = st.columns([5, 7], gap="large")
+    with t_left:
+        st.caption("Perbandingan fitur numerik utama (nilai asli)")
+        key_cols = [c for c in ["G1", "G2", "G3", "absences", "failures", "studytime", "goout", "Dalc", "Walc", "Medu", "Fedu", "age"]
+                    if c in prof_df.columns and c in clu_inputs]
+        cmp_df = pd.DataFrame({
+            "Siswa Ini": [clu_inputs[c] for c in key_cols],
+            f"Rata-rata C{cl}": [prof_df.loc[cl, c] for c in key_cols],
+            "Populasi": [df_all[c].mean() for c in key_cols],
+        }, index=[LABELS.get(c, c) for c in key_cols]).astype(float).round(2)
+        st.dataframe(cmp_df, width="stretch")
 
-    with rtab2:
+    with t_right:
+        st.caption("Profil rata-rata seluruh cluster")
+        prof_show = prof_df.copy()
+        prof_show.index = [names.get(i, f"Cluster {i}") for i in prof_show.index]
+        prof_show.columns = [LABELS.get(c, c) for c in prof_show.columns]
+        st.dataframe(prof_show.T.round(2), width="stretch")
+
+
+# =============================================================================
+#  TAB 3 - PREDIKSI MASSAL (BATCH PREDICTION)
+# =============================================================================
+with tab_batch:
+    section_heading("📂 Prediksi Massal & Segmentasi dari File")
+    st.caption("Unggah file CSV atau Excel berisi banyak data siswa, atau gunakan data sampel bawaan untuk mencoba fitur batch secara instan.")
+
+    needed = []
+    for sch in (reg_schema, clu_schema):
+        needed += [c for c in sch["feature_order"] if c not in needed and c != TARGET]
+    template = pd.DataFrame([user_inputs])[[c for c in needed if c in user_inputs]]
+
+    b_act1, b_act2, b_act3 = st.columns([4, 4, 4], gap="medium")
+    with b_act1:
+        st.download_button(
+            "⬇️ Unduh Template CSV (1 baris contoh)",
+            template.to_csv(index=False).encode("utf-8"),
+            file_name="template_siswa.csv",
+            mime="text/csv",
+            width="stretch",
+        )
+    with b_act2:
+        if st.button("⚡ Coba 30 Sampel Acak Dataset", width="stretch"):
+            st.session_state["batch_demo_df"] = df_raw.sample(n=min(30, len(df_raw)), random_state=RANDOM_STATE).drop(columns=[TARGET]).reset_index(drop=True)
+    with b_act3:
+        if "batch_demo_df" in st.session_state and st.button("🗑️ Bersihkan Data Demo", width="stretch"):
+            del st.session_state["batch_demo_df"]
+
+    up = st.file_uploader("Unggah file data siswa (.csv atau .xlsx)", type=["csv", "xlsx"], key="upload_batch")
+
+    df_up = None
+    source_label = ""
+    if up is not None:
+        try:
+            df_up = pd.read_csv(up, sep=None, engine="python") if up.name.lower().endswith(".csv") else pd.read_excel(up)
+            source_label = f"File unggahan: {up.name}"
+        except Exception as e:  # noqa: BLE001
+            st.error(f"File tidak dapat dibaca: {e}")
+    elif "batch_demo_df" in st.session_state:
+        df_up = st.session_state["batch_demo_df"].copy()
+        source_label = "Data demo (30 sampel acak dari student-mat tanpa kolom G3)"
+
+    if df_up is not None:
+        st.caption(f"Sumber aktif: **{source_label}** — {len(df_up)} baris, {df_up.shape[1]} kolom.")
+        result = df_up.copy()
+
+        # 1) Regresi batch
+        miss_r = [c for c in reg_schema["feature_order"] if c not in df_up.columns]
+        if miss_r:
+            st.warning(f"Prediksi G3 dilewati karena kolom berikut tidak ditemukan: {', '.join(miss_r)}")
+        else:
+            result["Prediksi_G3"] = predict_g3(reg_model, clean_batch(df_up, reg_schema)).round(2)
+            result["Status_Risiko"] = np.where(result["Prediksi_G3"] < reg_schema["pass_threshold"], "Berisiko", "Aman")
+
+        # 2) Clustering batch (otomatis gunakan Prediksi_G3 jika G3 tidak ada di file upload)
+        df_for_clu = df_up.copy()
+        used_pred_for_clu = False
+        if clu_schema["include_grades"] and TARGET not in df_for_clu.columns and "Prediksi_G3" in result.columns:
+            df_for_clu[TARGET] = result["Prediksi_G3"]
+            used_pred_for_clu = True
+
+        miss_c = [c for c in clu_schema["feature_order"] if c not in df_for_clu.columns]
+        if miss_c:
+            st.warning(f"Clustering dilewati karena kolom berikut tidak ditemukan: {', '.join(miss_c)}")
+        else:
+            labs = predict_cluster(clu_model, clu_schema, clean_batch(df_for_clu, clu_schema))
+            result["Cluster"] = labs
+            result["Nama_Cluster"] = [clu_schema["cluster_names"].get(int(i), f"Cluster {i}") for i in labs]
+            if used_pred_for_clu:
+                st.info("Kolom `G3` tidak tersedia pada file; segmentasi cluster otomatis memanfaatkan nilai `Prediksi_G3`.")
+
+        # KPI Ringkasan Batch
+        if "Prediksi_G3" in result.columns:
+            n_tot = len(result)
+            n_risk = int((result["Status_Risiko"] == "Berisiko").sum())
+            pct_risk = n_risk / max(n_tot, 1) * 100
+            avg_p = float(result["Prediksi_G3"].mean())
+            bk1, bk2, bk3, bk4 = st.columns(4, gap="medium")
+            bk1.markdown(kpi_card("Total Siswa Diproses", f"{n_tot}", "Baris valid terprediksi", accent="cyan"), unsafe_allow_html=True)
+            bk2.markdown(kpi_card("Rata-rata Prediksi G3", f"{avg_p:.2f} / 20", f"Median: {result['Prediksi_G3'].median():.2f}", accent="indigo"), unsafe_allow_html=True)
+            bk3.markdown(kpi_card("Siswa Berisiko (<10)", f"{n_risk} siswa", f"<span class='delta-neg'>{pct_risk:.1f}%</span> perlu pendampingan", accent="rose"), unsafe_allow_html=True)
+            bk4.markdown(kpi_card("Tingkat Kelulusan Prediksi", f"{100 - pct_risk:.1f}%", f"{n_tot - n_risk} siswa berstatus Aman", accent="emerald"), unsafe_allow_html=True)
+
+            st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
+            bc1, bc2 = st.columns(2, gap="large")
+            with bc1:
+                fig_bh = px.histogram(
+                    result, x="Prediksi_G3", color="Status_Risiko", nbins=18,
+                    color_discrete_map={"Aman": COLORS["emerald"], "Berisiko": COLORS["rose"]},
+                )
+                fig_bh.add_vline(x=PASS_THRESHOLD, line_dash="dash", line_color="#F8FAFC")
+                style_plotly(fig_bh, "Distribusi Prediksi Nilai Akhir (Batch)", height=310)
+                fig_bh.update_xaxes(title="Prediksi G3")
+                fig_bh.update_yaxes(title="Jumlah Siswa")
+                st.plotly_chart(fig_bh, width="stretch", theme=None)
+            with bc2:
+                if "Cluster" in result.columns:
+                    cl_cnt = result["Cluster"].value_counts().sort_index()
+                    fig_bc = go.Figure(go.Bar(
+                        x=[f"Cluster {i}" for i in cl_cnt.index], y=cl_cnt.values,
+                        marker_color=[CLUSTER_PALETTE[int(i) % len(CLUSTER_PALETTE)] for i in cl_cnt.index],
+                        text=cl_cnt.values, textposition="outside",
+                    ))
+                    style_plotly(fig_bc, "Sebaran Cluster pada Data Batch", height=310, show_legend=False)
+                    fig_bc.update_yaxes(title="Jumlah Siswa")
+                    st.plotly_chart(fig_bc, width="stretch", theme=None)
+
+        # Filter & Tabel Hasil
+        f1, f2 = st.columns([4, 4], gap="medium")
+        view_df = result.copy()
+        if "Status_Risiko" in view_df.columns:
+            with f1:
+                filt_risk = st.selectbox("Filter status risiko", ["Semua", "Berisiko", "Aman"], key="batch_f_risk")
+                if filt_risk != "Semua":
+                    view_df = view_df[view_df["Status_Risiko"] == filt_risk]
+        if "Cluster" in view_df.columns:
+            with f2:
+                cl_opts = ["Semua"] + [f"Cluster {i}" for i in sorted(result["Cluster"].unique())]
+                filt_cl = st.selectbox("Filter cluster", cl_opts, key="batch_f_cl")
+                if filt_cl != "Semua":
+                    view_df = view_df[view_df["Cluster"] == int(filt_cl.split()[-1])]
+
+        st.dataframe(view_df, width="stretch")
+        st.download_button(
+            "⬇️ Unduh Hasil Prediksi Lengkap (CSV)",
+            result.to_csv(index=False).encode("utf-8"),
+            file_name="hasil_prediksi_siswa.csv",
+            mime="text/csv",
+        )
+
+
+# =============================================================================
+#  TAB 4 - EVALUASI REGRESI (TERSTRUKTUR DENGAN SUB-TAB)
+# =============================================================================
+with tab_evr:
+    R = RES_R
+    rep = R["report"]
+    r2_t, mae_t, rmse_t = rep.loc["Test", "R2"], rep.loc["Test", "MAE"], rep.loc["Test", "RMSE"]
+    acc2_t = rep.loc["Test", "Akurasi ±2 poin"] * 100
+    overfit_ok = R["gap_r2"] <= 0.15
+
+    # KPI Strip Evaluasi Regresi
+    ek1, ek2, ek3, ek4 = st.columns(4, gap="medium")
+    ek1.markdown(kpi_card("Model Terbaik (CV)", R["schema"]["model_name"], f"{R['n_train']} train / {R['n_test']} test · {R['n_features']} fitur", accent="cyan"), unsafe_allow_html=True)
+    ek2.markdown(kpi_card("Test R²", f"{r2_t:.3f}", f"Selisih Train–Test: {R['gap_r2']:+.3f} ({'Stabil' if overfit_ok else 'Waspada Overfit'})", accent="emerald" if overfit_ok else "amber"), unsafe_allow_html=True)
+    ek3.markdown(kpi_card("Test RMSE / MAE", f"{rmse_t:.2f} / {mae_t:.2f}", "Kesalahan rata-rata pada skala 0–20", accent="indigo"), unsafe_allow_html=True)
+    ek4.markdown(kpi_card("Akurasi ±2 Poin", f"{acc2_t:.0f}%", f"Akurasi ±1 poin: {rep.loc['Test', 'Akurasi ±1 poin']*100:.0f}%", accent="cyan"), unsafe_allow_html=True)
+
+    # Ringkasan Interpretasi
+    top3_lbl = [f"{LABELS.get(c, c)} ({c})" for c in R["importance"]["Fitur"].head(3).tolist()]
+    ev_notes = [
+        f"Model terbaik: <strong>{html.escape(R['schema']['model_name'])}</strong> ({'dengan' if use_prev_grades else 'tanpa'} G1/G2; absences {'dikecualikan' if exclude_absences else 'disertakan'}).",
+        f"Menjelaskan <strong>{r2_t:.1%}</strong> variansi nilai akhir pada data uji (R² = {r2_t:.3f}, MAE = {mae_t:.2f}, RMSE = {rmse_t:.2f}).",
+        f"Fitur paling berpengaruh: <strong>{html.escape(', '.join(top3_lbl))}</strong>.",
+    ]
+    if R["mae_zero"] is not None and R["mae_other"] is not None:
+        ev_notes.append(
+            f"Pemisahan error G3 = 0 vs G3 &gt; 0 (sesuai rekomendasi EDA): "
+            f"G3 = 0 (n={R['n_test_zero']}) → MAE <strong>{R['mae_zero']:.2f}</strong>, RMSE <strong>{R['rmse_zero']:.2f}</strong> | "
+            f"G3 &gt; 0 (n={R['n_test_other']}) → MAE <strong>{R['mae_other']:.2f}</strong>, RMSE <strong>{R['rmse_other']:.2f}</strong>."
+        )
+    if "Benchmark G3 = G2 (Test)" in rep.index:
+        b_rmse = rep.loc["Benchmark G3 = G2 (Test)", "RMSE"]
+        b_mae = rep.loc["Benchmark G3 = G2 (Test)", "MAE"]
+        ev_notes.append(f"Pembanding naif <code>G3 = G2</code> pada data uji menghasilkan MAE = {b_mae:.2f} dan RMSE = {b_rmse:.2f}.")
+    st.markdown(insight_box("Ringkasan Evaluasi & Interpretasi Regresi", "<ul>" + "".join(f"<li>{x}</li>" for x in ev_notes) + "</ul>", tone="cyan"), unsafe_allow_html=True)
+
+    sub_r1, sub_r2, sub_r3, sub_r4 = st.tabs([
+        "📊 Benchmark & Tuning", "🎯 Diagnostik Prediksi", "🚨 Deteksi Risiko (G3 < 10)", "🧠 Interpretasi Fitur"
+    ])
+
+    with sub_r1:
+        b_sorted = R["bench"].sort_values("CV RMSE", ascending=False)
+        bar_cols = [COLORS["emerald"] if m == R["schema"]["model_name"] else COLORS["indigo"] for m in b_sorted["Model"]]
+        fig_bench = go.Figure(go.Bar(
+            x=b_sorted["CV RMSE"], y=b_sorted["Model"], orientation="h",
+            marker_color=bar_cols,
+            text=[f"{v:.2f}" for v in b_sorted["CV RMSE"]], textposition="outside",
+        ))
+        style_plotly(fig_bench, "Perbandingan Algoritma Regresi (CV RMSE lebih kecil = lebih baik)", height=390, show_legend=False)
+        fig_bench.update_xaxes(title="CV RMSE")
+        st.plotly_chart(fig_bench, width="stretch", theme=None)
+
+        m_col1, m_col2 = st.columns([6, 6], gap="large")
+        with m_col1:
+            section_heading("Metrik Train, Test & Baseline")
+            st.dataframe(rep.round(3), width="stretch")
+        with m_col2:
+            section_heading(f"Hasil Hyperparameter Tuning ({', '.join(R['tunable'])})")
+            st.dataframe(R["tune"].round(3), width="stretch")
+
+        with st.expander("Lihat tabel lengkap hasil Cross-Validation semua algoritma"):
+            st.dataframe(R["bench"].round(3), width="stretch")
+
+    with sub_r2:
         d1, d2 = st.columns(2, gap="large")
         with d1:
-            fig_ap = go.Figure()
-            fig_ap.add_trace(go.Scatter(
+            fig_avp = go.Figure()
+            fig_avp.add_trace(go.Scatter(
                 x=R["y_test"], y=R["pred_test"], mode="markers",
-                marker=dict(size=8, color=np.abs(R["resid"]), colorscale="Plasma", showscale=True,
-                            colorbar=dict(title="|Error|", thickness=12)),
+                marker=dict(
+                    size=9, color=np.abs(R["resid"]), colorscale="Turbo", showscale=True,
+                    colorbar=dict(title="|Error|", thickness=12),
+                    line=dict(width=0.8, color="#0F172A"),
+                ),
                 hovertemplate="Aktual: %{x:.1f}<br>Prediksi: %{y:.2f}<extra></extra>",
                 name="Data Uji",
             ))
-            fig_ap.add_trace(go.Scatter(x=[0, 20], y=[0, 20], mode="lines", line=dict(dash="dash", color=COLORS["muted"]), name="Garis Ideal"))
-            style_plotly(fig_ap, height=360, title=f"Aktual vs Prediksi ({R['schema']['model_name']})")
-            fig_ap.update_xaxes(title_text="Nilai Aktual (G3)", range=[-0.5, 20.5])
-            fig_ap.update_yaxes(title_text="Prediksi G3", range=[-0.5, 20.5])
-            st.plotly_chart(fig_ap, use_container_width=True)
+            fig_avp.add_trace(go.Scatter(
+                x=[0, 20], y=[0, 20], mode="lines",
+                line=dict(color="#94A3B8", dash="dash"), name="Garis Ideal (y=x)",
+            ))
+            style_plotly(fig_avp, f"Aktual vs Prediksi ({R['schema']['model_name']})", height=350)
+            fig_avp.update_xaxes(title="G3 Aktual", range=[-0.5, 20.5])
+            fig_avp.update_yaxes(title="G3 Prediksi", range=[-0.5, 20.5])
+            st.plotly_chart(fig_avp, width="stretch", theme=None)
 
         with d2:
             fig_res = go.Figure()
             fig_res.add_trace(go.Scatter(
                 x=R["pred_test"], y=R["resid"], mode="markers",
-                marker=dict(size=8, color=COLORS["sky"], opacity=0.8),
-                hovertemplate="Prediksi: %{x:.2f}<br>Residual: %{y:.2f}<extra></extra>",
-                name="Residual",
+                marker=dict(size=9, color=COLORS["cyan"], opacity=0.82, line=dict(width=0.7, color="#0F172A")),
+                hovertemplate="Prediksi: %{x:.2f}<br>Residual: %{y:+.2f}<extra></extra>",
             ))
-            fig_res.add_hline(y=0, line_dash="dash", line_color=COLORS["rose"])
-            style_plotly(fig_res, height=360, title="Plot Residual (Pola Acak Menunjukkan Fit yang Baik)")
-            fig_res.update_xaxes(title_text="Prediksi G3")
-            fig_res.update_yaxes(title_text="Residual (Aktual − Prediksi)")
-            st.plotly_chart(fig_res, use_container_width=True)
+            fig_res.add_hline(y=0, line_dash="dash", line_color=COLORS["rose"], line_width=2)
+            style_plotly(fig_res, "Plot Residual vs Prediksi (pola acak di sekitar 0 = baik)", height=350, show_legend=False)
+            fig_res.update_xaxes(title="Prediksi G3")
+            fig_res.update_yaxes(title="Residual (Aktual − Prediksi)")
+            st.plotly_chart(fig_res, width="stretch", theme=None)
 
         d3, d4 = st.columns(2, gap="large")
         with d3:
-            fig_rhist = go.Figure(go.Histogram(x=R["resid"], nbinsx=20, marker_color=COLORS["emerald"], opacity=0.85))
-            fig_rhist.add_vline(x=0, line_dash="dash", line_color=COLORS["text"])
-            style_plotly(fig_rhist, height=300, title="Distribusi Residual")
-            fig_rhist.update_xaxes(title_text="Residual")
-            fig_rhist.update_yaxes(title_text="Frekuensi")
-            st.plotly_chart(fig_rhist, use_container_width=True)
+            fig_rh = go.Figure(go.Histogram(
+                x=R["resid"], nbinsx=20,
+                marker=dict(color=COLORS["emerald"], opacity=0.75, line=dict(color="#0F172A", width=1)),
+            ))
+            fig_rh.add_vline(x=0, line_dash="dash", line_color="#F8FAFC")
+            style_plotly(fig_rh, "Distribusi Residual (Data Uji)", height=330, show_legend=False)
+            fig_rh.update_xaxes(title="Residual")
+            fig_rh.update_yaxes(title="Frekuensi")
+            st.plotly_chart(fig_rh, width="stretch", theme=None)
 
         with d4:
             if R["lc_data"] is not None:
                 lc = R["lc_data"]
                 fig_lc = go.Figure()
-                fig_lc.add_trace(go.Scatter(x=lc["sizes"], y=lc["train_rmse"], mode="lines+markers", name="Train RMSE", line=dict(color=COLORS["sky"])))
-                fig_lc.add_trace(go.Scatter(x=lc["sizes"], y=lc["val_rmse"], mode="lines+markers", name="Validasi RMSE", line=dict(color=COLORS["amber"])))
-                style_plotly(fig_lc, height=300, title="Learning Curve")
-                fig_lc.update_xaxes(title_text="Jumlah Data Latih")
-                fig_lc.update_yaxes(title_text="RMSE")
-                st.plotly_chart(fig_lc, use_container_width=True)
+                fig_lc.add_trace(go.Scatter(x=lc["sizes"], y=lc["train_rmse"], mode="lines+markers", name="Train RMSE", line=dict(color=COLORS["cyan"], width=2.5)))
+                fig_lc.add_trace(go.Scatter(x=lc["sizes"], y=lc["val_rmse"], mode="lines+markers", name="Validasi RMSE", line=dict(color=COLORS["amber"], width=2.5)))
+                style_plotly(fig_lc, "Learning Curve (Mode Lengkap)", height=330)
+                fig_lc.update_xaxes(title="Jumlah Data Latih")
+                fig_lc.update_yaxes(title="RMSE")
+                st.plotly_chart(fig_lc, width="stretch", theme=None)
             else:
-                rk = R["risk"]
-                st.markdown(f"**Deteksi Siswa Berisiko (G3 < {PASS_THRESHOLD})**")
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    kpi_card("Terdeteksi Benar (TP)", str(rk["tp"]), f"Recall berisiko: {rk['recall']:.0%}")
-                    st.markdown("<div style='height: 0.6rem'></div>", unsafe_allow_html=True)
-                    kpi_card("Salah Alarm (FP)", str(rk["fp"]), f"Precision berisiko: {rk['precision']:.0%}")
-                with rc2:
-                    kpi_card("Terlewat (FN)", str(rk["fn"]), "Siswa berisiko diprediksi aman")
-                    st.markdown("<div style='height: 0.6rem'></div>", unsafe_allow_html=True)
-                    kpi_card("Benar Lulus (TN)", str(rk["tn"]), "Siswa aman diprediksi aman")
+                grp_lbl = [f"G3 = 0 (n={R['n_test_zero']})", f"G3 > 0 (n={R['n_test_other']})"]
+                fig_err = go.Figure()
+                fig_err.add_trace(go.Bar(name="MAE", x=grp_lbl, y=[R["mae_zero"] or 0, R["mae_other"] or 0], marker_color=COLORS["cyan"]))
+                fig_err.add_trace(go.Bar(name="RMSE", x=grp_lbl, y=[R["rmse_zero"] or 0, R["rmse_other"] or 0], marker_color=COLORS["rose"]))
+                fig_err.update_layout(barmode="group")
+                style_plotly(fig_err, "Perbandingan Error: Kasus G3 = 0 vs G3 > 0", height=330)
+                fig_err.update_yaxes(title="Error (poin)")
+                st.plotly_chart(fig_err, width="stretch", theme=None)
 
-        if R["lc_data"] is not None:
-            rk = R["risk"]
-            st.markdown(f"**Deteksi Siswa Berisiko (G3 < {PASS_THRESHOLD})**")
-            k1, k2, k3, k4 = st.columns(4)
-            with k1:
-                kpi_card("Terdeteksi Benar (TP)", str(rk["tp"]), f"Recall: {rk['recall']:.0%}")
-            with k2:
-                kpi_card("Terlewat (FN)", str(rk["fn"]), "Berisiko diprediksi aman")
-            with k3:
-                kpi_card("Salah Alarm (FP)", str(rk["fp"]), f"Precision: {rk['precision']:.0%}")
-            with k4:
-                kpi_card("Benar Lulus (TN)", str(rk["tn"]), "Aman diprediksi aman")
+    with sub_r3:
+        rk = R["risk"]
+        rk1, rk2, rk3 = st.columns(3, gap="medium")
+        rk1.markdown(kpi_card("Recall Siswa Berisiko", f"{rk['recall']:.0%}", f"{rk['tp']} dari {rk['tp'] + rk['fn']} siswa berisiko terdeteksi", accent="emerald" if rk["recall"] >= 0.75 else "amber"), unsafe_allow_html=True)
+        rk2.markdown(kpi_card("Precision Siswa Berisiko", f"{rk['precision']:.0%}", f"Salah alarm (FP): {rk['fp']} siswa", accent="cyan"), unsafe_allow_html=True)
+        rk3.markdown(kpi_card("F1-Score Deteksi Risiko", f"{rk['f1']:.2f}", f"Batas risiko: G3 < {PASS_THRESHOLD}", accent="indigo"), unsafe_allow_html=True)
 
-    with rtab3:
-        top_imp = R["importance"].head(12).iloc[::-1]
-        ic1, ic2 = st.columns([1.35, 1.0], gap="large")
-        with ic1:
+        st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
+        cm_z = [[rk["tp"], rk["fn"]], [rk["fp"], rk["tn"]]]
+        cm_txt = [
+            [f"TP: {rk['tp']}<br>(Terdeteksi benar)", f"FN: {rk['fn']}<br>(Terlewat)"],
+            [f"FP: {rk['fp']}<br>(Salah alarm)", f"TN: {rk['tn']}<br>(Benar lulus)"],
+        ]
+        fig_cm = go.Figure(go.Heatmap(
+            z=cm_z,
+            x=["Prediksi Berisiko (<10)", "Prediksi Aman (≥10)"],
+            y=["Aktual Berisiko (<10)", "Aktual Aman (≥10)"],
+            text=cm_txt, texttemplate="%{text}",
+            textfont=dict(size=14, color="#F8FAFC"),
+            colorscale=[[0, "#1E293B"], [1, "#0284C7"]],
+            showscale=False,
+        ))
+        style_plotly(fig_cm, f"Matriks Konfusi Deteksi Siswa Berisiko (Data Uji, n = {R['n_test']})", height=340, show_legend=False)
+        fig_cm.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig_cm, width="stretch", theme=None)
+
+    with sub_r4:
+        imp_top = R["importance"].head(12).iloc[::-1]
+        i_col1, i_col2 = st.columns([7, 5], gap="large")
+        with i_col1:
             fig_imp = go.Figure(go.Bar(
-                y=top_imp["Label"],
-                x=top_imp["Kenaikan RMSE"],
-                error_x=dict(type="data", array=top_imp["Std"], color=COLORS["muted"]),
+                x=imp_top["Kenaikan RMSE bila diacak"],
+                y=[f"{r['Label']} ({r['Fitur']})" for _, r in imp_top.iterrows()],
                 orientation="h",
-                marker_color=COLORS["primary_light"],
+                error_x=dict(type="data", array=imp_top["Std"], color="#94A3B8", thickness=1.5),
+                marker_color=COLORS["cyan"],
             ))
-            style_plotly(fig_imp, height=400, title="Permutation Importance pada Data Uji (Kenaikan RMSE)")
-            fig_imp.update_xaxes(title_text="Kenaikan RMSE saat fitur diacak")
-            st.plotly_chart(fig_imp, use_container_width=True)
-        with ic2:
-            st.markdown("**10 Fitur Paling Berpengaruh**")
-            st.dataframe(R["importance"][["Label", "Kenaikan RMSE", "Std"]].head(10).round(4), use_container_width=True)
+            style_plotly(fig_imp, "Permutation Importance — Top 12 Fitur (Data Uji)", height=420, show_legend=False)
+            fig_imp.update_xaxes(title="Kenaikan RMSE saat fitur diacak (makin besar = makin penting)")
+            st.plotly_chart(fig_imp, width="stretch", theme=None)
+
+        with i_col2:
+            section_heading("Tabel Top 10 Fitur")
+            st.dataframe(R["importance"][["Label", "Fitur", "Kenaikan RMSE bila diacak", "Std"]].head(10).round(4), width="stretch")
             if R["coef"] is not None:
-                st.markdown("**Koefisien Terbesar (Fitur Terstandarisasi)**")
-                st.dataframe(R["coef"].round(3).rename("Koefisien").to_frame(), use_container_width=True)
+                section_heading("Koefisien Terbesar (Terstandarisasi)")
+                st.dataframe(R["coef"].round(3).rename("Koefisien").to_frame(), width="stretch")
 
         if R["pdp_data"]:
-            fig_pdp = make_subplots(rows=1, cols=len(R["pdp_data"]), subplot_titles=[d["label"] for d in R["pdp_data"]])
-            for i, d in enumerate(R["pdp_data"], start=1):
-                fig_pdp.add_trace(
-                    go.Scatter(x=d["grid"], y=d["avg"], mode="lines+markers", line=dict(color=COLORS["sky"], width=2.5), showlegend=False),
-                    row=1, col=i,
-                )
-            style_plotly(fig_pdp, height=320, title="Partial Dependence: Pengaruh Rata-rata Fitur Utama terhadap Prediksi G3")
-            st.plotly_chart(fig_pdp, use_container_width=True)
+            section_heading("Partial Dependence Plot — Pengaruh Rata-rata 3 Fitur Numerik Teratas")
+            pdp_cols = st.columns(len(R["pdp_data"]), gap="medium")
+            for idx, (feat_p, pdata) in enumerate(R["pdp_data"].items()):
+                fig_p = go.Figure(go.Scatter(
+                    x=pdata["grid"], y=pdata["avg"], mode="lines+markers",
+                    line=dict(color=COLORS["indigo"], width=2.8),
+                    marker=dict(size=6, color=COLORS["cyan"]),
+                    fill="tozeroy", fillcolor="rgba(129, 140, 248, 0.14)",
+                ))
+                style_plotly(fig_p, f"{LABELS.get(feat_p, feat_p)} ({feat_p})", height=280, show_legend=False)
+                fig_p.update_xaxes(title=feat_p)
+                fig_p.update_yaxes(title="Rata-rata Prediksi G3")
+                pdp_cols[idx].plotly_chart(fig_p, width="stretch", theme=None)
 
 
 # =============================================================================
-#  HALAMAN 4 — EVALUASI CLUSTERING
+#  TAB 5 - EVALUASI CLUSTERING (TERSTRUKTUR DENGAN SUB-TAB)
 # =============================================================================
-elif page == "Evaluasi Clustering":
+with tab_evc:
     C = RES_C
     ev = C["ev"]
-    sil_t, ari_m = ev.loc["Test", "silhouette"], float(C["ari"].mean())
-    sil_txt = "kuat" if sil_t > 0.5 else ("sedang" if sil_t >= 0.25 else "lemah (tumpang-tindih)")
-    stab_txt = "sangat stabil" if ari_m > 0.8 else ("cukup stabil" if ari_m >= 0.6 else "kurang stabil")
+    sil_t, ari_m = float(ev.loc["Test", "silhouette"]), float(C["ari"].mean())
+    sil_txt = "Kuat" if sil_t > 0.5 else ("Sedang" if sil_t >= 0.25 else "Lemah (tumpang-tindih)")
+    stab_txt = "Sangat stabil" if ari_m > 0.8 else ("Cukup stabil" if ari_m >= 0.6 else "Kurang stabil")
 
-    section_header(
-        "Evaluasi Model Unsupervised",
-        "Kualitas, Stabilitas & Karakteristik Segmentasi Siswa",
-        f"Split data: {C['n_train']} latih / {C['n_test']} uji · PCA mempertahankan {C['n_pc']} komponen ({C['var_pc']:.0%} varians).",
-    )
+    ck1, ck2, ck3, ck4 = st.columns(4, gap="medium")
+    ck1.markdown(kpi_card("Algoritma & k Terpilih", f"{clu_schema['algorithm']} (k={clu_schema['k']})", f"PCA {C['n_pc']} PC ({C['var_pc']:.0%} varians)", accent="indigo"), unsafe_allow_html=True)
+    ck2.markdown(kpi_card("Silhouette Test", f"{sil_t:.3f}", f"{sil_txt} (acak: {C['rand_sil']:.3f})", accent="emerald" if sil_t >= 0.25 else "amber"), unsafe_allow_html=True)
+    ck3.markdown(kpi_card("Stabilitas Bootstrap ARI", f"{ari_m:.2f}", stab_txt, accent="cyan"), unsafe_allow_html=True)
+    ck4.markdown(kpi_card("Kruskal-Wallis G3", f"H = {C['kruskal_H']:.1f}", f"p = {C['kruskal_p']:.1e} ({'Signifikan' if C['kruskal_p'] < 0.05 else 'Tidak signifikan'})", accent="emerald" if C["kruskal_p"] < 0.05 else "amber"), unsafe_allow_html=True)
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        kpi_card("Algoritma Terpilih", clu_schema["algorithm"], f"k = {clu_schema['k']} cluster")
-    with c2:
-        kpi_card("Silhouette (Test)", f"{sil_t:.3f}", f"Label acak: {C['rand_sil']:.3f}")
-    with c3:
-        kpi_card("Stabilitas ARI", f"{ari_m:.2f}", f"Kategori: {stab_txt}")
-    with c4:
-        kpi_card("Davies-Bouldin", f"{ev.loc['Test', 'davies']:.2f}", "Lebih kecil lebih baik")
-    with c5:
-        kpi_card("Kruskal-Wallis (G3)", f"p = {C['kruskal_p']:.1e}", "Signifikan" if C["kruskal_p"] < 0.05 else "Tidak signifikan")
+    cl_lines = [
+        f"Data dibagi <strong>{C['n_train']} train / {C['n_test']} test</strong> ({'dengan' if include_grades else 'tanpa'} G1–G3 sebagai fitur).",
+        "Acuan silhouette: &gt; 0,5 kuat, 0,25–0,5 sedang, &lt; 0,25 lemah (baca sebagai segmentasi deskriptif).",
+    ]
+    for c_id in C["prof"].index:
+        cl_lines.append(
+            f"<strong>{html.escape(clu_schema['cluster_names'][int(c_id)])}</strong> · "
+            f"n = {int(C['size'][c_id])}, rata-rata G3 = {C['prof'].loc[c_id, 'G3']:.1f}, "
+            f"absen = {C['prof'].loc[c_id, 'absences']:.1f}, failures = {C['prof'].loc[c_id, 'failures']:.2f}"
+        )
+    st.markdown(insight_box("Ringkasan Evaluasi Clustering", "<ul>" + "".join(f"<li>{x}</li>" for x in cl_lines) + "</ul>", tone="cyan"), unsafe_allow_html=True)
 
-    st.markdown(
-        f'<div class="callout">'
-        f'<strong>Ringkasan Interpretasi:</strong> Struktur cluster tergolong <strong>{sil_txt}</strong> '
-        f'(Silhouette test = {sil_t:.3f}) dan <strong>{stab_txt}</strong> terhadap resampling bootstrap (ARI = {ari_m:.2f}). '
-        f'Uji Kruskal-Wallis menunjukkan perbedaan G3 antar cluster {"signifikan secara statistik" if C["kruskal_p"] < 0.05 else "tidak signifikan"} '
-        f'(H = {C["kruskal_H"]:.1f}, p = {C["kruskal_p"]:.1e}). Pada data survei campuran, cluster dibaca sebagai segmentasi deskriptif.'
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    sub_c1, sub_c2, sub_c3 = st.tabs(["📈 Pemilihan Algoritma & k", "🗺️ Peta PCA 2D & Silhouette", "🔥 Heatmap Profil & Kategori"])
 
-    ctab1, ctab2, ctab3 = st.tabs(["Pemilihan Algoritma & k", "Sebaran PCA & Silhouette", "Profil & Heatmap Z-Score"])
-
-    with ctab1:
-        # 2x2 grid responsif (menggantikan 1x4 terlalu lebar)
+    with sub_c1:
+        sel = C["sel"]
         fig_sel = make_subplots(
             rows=2, cols=2,
-            subplot_titles=[
-                "Silhouette (Lebih Besar Lebih Baik)",
-                "Calinski-Harabasz (Lebih Besar Lebih Baik)",
-                "Davies-Bouldin (Lebih Kecil Lebih Baik)",
+            subplot_titles=(
+                "Silhouette (makin besar makin baik)",
+                "Calinski-Harabasz (makin besar makin baik)",
+                "Davies-Bouldin (makin kecil makin baik)",
                 "Elbow KMeans (Inertia)",
-            ],
+            ),
             vertical_spacing=0.18, horizontal_spacing=0.10,
         )
-        algo_colors = {"KMeans": COLORS["sky"], "GMM": COLORS["primary_light"], "Agglomerative": COLORS["emerald"]}
-        for name, g in C["sel"].groupby("Algoritma"):
-            col_a = algo_colors.get(name, COLORS["amber"])
-            fig_sel.add_trace(go.Scatter(x=g["k"], y=g["silhouette"], mode="lines+markers", name=name, line=dict(color=col_a), legendgroup=name), row=1, col=1)
-            fig_sel.add_trace(go.Scatter(x=g["k"], y=g["calinski"], mode="lines+markers", name=name, line=dict(color=col_a), legendgroup=name, showlegend=False), row=1, col=2)
-            fig_sel.add_trace(go.Scatter(x=g["k"], y=g["davies"], mode="lines+markers", name=name, line=dict(color=col_a), legendgroup=name, showlegend=False), row=2, col=1)
-        km_df = C["sel"][C["sel"].Algoritma == "KMeans"]
-        fig_sel.add_trace(go.Scatter(x=km_df["k"], y=km_df["inertia"], mode="lines+markers", name="Inertia", line=dict(color=COLORS["rose"]), showlegend=False), row=2, col=2)
-        style_plotly(fig_sel, height=560)
-        st.plotly_chart(fig_sel, use_container_width=True)
+        algo_colors = {"KMeans": COLORS["cyan"], "GMM": COLORS["emerald"], "Agglomerative": COLORS["amber"]}
+        for algo_name, grp in sel.groupby("Algoritma"):
+            col_a = algo_colors.get(algo_name, COLORS["indigo"])
+            fig_sel.add_trace(go.Scatter(x=grp["k"], y=grp["silhouette"], mode="lines+markers", name=algo_name, line=dict(color=col_a, width=2.5), legendgroup=algo_name), row=1, col=1)
+            fig_sel.add_trace(go.Scatter(x=grp["k"], y=grp["calinski"], mode="lines+markers", name=algo_name, line=dict(color=col_a, width=2.5), legendgroup=algo_name, showlegend=False), row=1, col=2)
+            fig_sel.add_trace(go.Scatter(x=grp["k"], y=grp["davies"], mode="lines+markers", name=algo_name, line=dict(color=col_a, width=2.5), legendgroup=algo_name, showlegend=False), row=2, col=1)
+        km_df = sel[sel["Algoritma"] == "KMeans"]
+        fig_sel.add_trace(go.Scatter(x=km_df["k"], y=km_df["inertia"], mode="lines+markers", name="KMeans Inertia", line=dict(color=COLORS["rose"], width=2.5)), row=2, col=2)
+        style_plotly(fig_sel, "", height=540)
+        st.plotly_chart(fig_sel, width="stretch", theme=None)
 
-        t1, t2 = st.columns(2, gap="large")
-        with t1:
-            st.markdown("**Metrik Evaluasi Train vs Test**")
-            st.dataframe(ev.round(3), use_container_width=True)
-        with t2:
-            st.markdown("**10 Kombinasi Algoritma & k Terbaik**")
-            st.dataframe(C["sel"].sort_values("rank_score").head(10)[["Algoritma", "k", "silhouette", "calinski", "davies"]].round(3), use_container_width=True)
+        sc_l, sc_r = st.columns([5, 7], gap="large")
+        with sc_l:
+            section_heading("Metrik Train vs Test")
+            st.dataframe(ev.round(3), width="stretch")
+        with sc_r:
+            section_heading("Top 10 Kandidat Algoritma & k")
+            st.dataframe(sel.sort_values("rank_score").head(10)[["Algoritma", "k", "silhouette", "calinski", "davies"]].round(3), width="stretch")
 
-        with st.expander("DBSCAN (Pembanding — tidak memiliki .predict() untuk data baru)"):
-            st.dataframe(C["dbscan"].round(3), use_container_width=True)
+        with st.expander("Pembanding DBSCAN (tidak digunakan untuk deployment karena tanpa .predict())"):
+            st.dataframe(C["dbscan"].round(3), width="stretch")
 
-    with ctab2:
-        p1, p2 = st.columns([1.3, 1.0], gap="large")
-        with p1:
-            fig_pca = go.Figure()
-            for cl in sorted(C["df_all"]["cluster"].unique()):
-                mask = C["df_all"]["cluster"].values == cl
-                sub = C["df_all"][mask]
-                fig_pca.add_trace(go.Scatter(
-                    x=C["P2"][mask, 0], y=C["P2"][mask, 1], mode="markers",
-                    name=f"Cluster {cl}",
-                    marker=dict(size=7, color=CLUSTER_PALETTE[cl % len(CLUSTER_PALETTE)], opacity=0.85, line=dict(width=0.5, color="#0B0F19")),
-                    customdata=np.stack([sub["G3"], sub["failures"], sub["studytime"]], axis=-1),
-                    hovertemplate=f"Cluster {cl}<br>G3: %{{customdata[0]}}<br>Failures: %{{customdata[1]}}<br>Studytime: %{{customdata[2]}}<extra></extra>",
-                ))
-            style_plotly(fig_pca, height=430, title=f"Sebaran Cluster pada PCA 2D ({clu_schema['algorithm']}, k = {clu_schema['k']})")
-            fig_pca.update_xaxes(title_text=f"PC1 ({C['pca2_var'][0]:.1%})")
-            fig_pca.update_yaxes(title_text=f"PC2 ({C['pca2_var'][1]:.1%})")
-            st.plotly_chart(fig_pca, use_container_width=True)
+    with sub_c2:
+        p_col1, p_col2 = st.columns([7, 5], gap="large")
+        with p_col1:
+            pca_df = pd.DataFrame({
+                "PC1": C["P2"][:, 0],
+                "PC2": C["P2"][:, 1],
+                "Cluster": [f"Cluster {c}" for c in C["df_all"]["cluster"]],
+                "G3": C["df_all"]["G3"].values,
+                "G2": C["df_all"]["G2"].values,
+                "Failures": C["df_all"]["failures"].values,
+                "Absences": C["df_all"]["absences"].values,
+            })
+            fig_pca = px.scatter(
+                pca_df, x="PC1", y="PC2", color="Cluster",
+                hover_data=["G3", "G2", "Failures", "Absences"],
+                color_discrete_sequence=CLUSTER_PALETTE,
+            )
+            fig_pca.update_traces(marker=dict(size=8, opacity=0.85, line=dict(width=0.6, color="#0B1120")))
+            style_plotly(fig_pca, f"Sebaran Cluster ({clu_schema['algorithm']}, k={clu_schema['k']}) pada PCA 2D", height=430)
+            fig_pca.update_xaxes(title=f"PC1 ({C['pca2_var'][0]:.1%} varians)")
+            fig_pca.update_yaxes(title=f"PC2 ({C['pca2_var'][1]:.1%} varians)")
+            st.plotly_chart(fig_pca, width="stretch", theme=None)
 
-        with p2:
-            sil_df = pd.DataFrame({"Cluster": [f"Cluster {c}" for c in C["df_all"]["cluster"]], "Silhouette": C["sample_sil"]})
+        with p_col2:
             fig_sil = go.Figure()
-            for cl in sorted(C["df_all"]["cluster"].unique()):
-                vals = sil_df[sil_df["Cluster"] == f"Cluster {cl}"]["Silhouette"]
-                fig_sil.add_trace(go.Box(
-                    y=vals, name=f"Cluster {cl}",
-                    marker_color=CLUSTER_PALETTE[cl % len(CLUSTER_PALETTE)], boxmean=True,
+            y_cursor = 0
+            for c_id in range(clu_schema["k"]):
+                vals = np.sort(C["sample_sil"][C["df_all"]["cluster"].values == c_id])
+                y_pos = np.arange(y_cursor, y_cursor + len(vals))
+                fig_sil.add_trace(go.Bar(
+                    x=vals, y=y_pos, orientation="h",
+                    name=f"Cluster {c_id}",
+                    marker=dict(color=CLUSTER_PALETTE[c_id % len(CLUSTER_PALETTE)], line=dict(width=0)),
+                    hovertemplate=f"Cluster {c_id}<br>Silhouette: %{{x:.3f}}<extra></extra>",
                 ))
-            fig_sil.add_hline(y=float(C["sample_sil"].mean()), line_dash="dash", line_color=COLORS["rose"], annotation_text="Rata-rata")
-            style_plotly(fig_sil, height=430, title="Distribusi Nilai Silhouette per Cluster")
-            fig_sil.update_yaxes(title_text="Nilai Silhouette")
-            st.plotly_chart(fig_sil, use_container_width=True)
+                y_cursor += len(vals) + 12
+            fig_sil.add_vline(x=float(C["sample_sil"].mean()), line_dash="dash", line_color=COLORS["rose"], line_width=2)
+            style_plotly(fig_sil, "Distribusi Silhouette per Observasi", height=430)
+            fig_sil.update_xaxes(title="Nilai Silhouette")
+            fig_sil.update_yaxes(showticklabels=False, title="Observasi Siswa")
+            fig_sil.update_layout(bargap=0)
+            st.plotly_chart(fig_sil, width="stretch", theme=None)
 
-    with ctab3:
-        z_t = C["z_prof"].T
-        z_labels = [LABELS.get(c, c) for c in z_t.index]
+    with sub_c3:
+        z_df = C["z_prof"].T.copy()
+        z_df.index = [f"{LABELS.get(c, c)} ({c})" for c in z_df.index]
+        z_df.columns = [f"Cluster {c}" for c in z_df.columns]
         fig_hm = go.Figure(go.Heatmap(
-            z=z_t.values,
-            x=[f"Cluster {c}" for c in z_t.columns],
-            y=z_labels,
-            colorscale="RdBu_r",
-            zmid=0,
-            text=np.round(z_t.values, 2),
+            z=z_df.values,
+            x=z_df.columns,
+            y=z_df.index,
+            colorscale="RdBu_r", zmid=0,
+            text=np.round(z_df.values, 2),
             texttemplate="%{text}",
             textfont=dict(size=11),
-            colorbar=dict(title="Z-score", thickness=14),
+            colorbar=dict(title="Z-Score", thickness=14),
         ))
-        style_plotly(fig_hm, height=560, title="Deviasi Rata-rata Fitur per Cluster (Z-Score: Merah = Di Atas Rata-rata, Biru = Di Bawah)")
-        st.plotly_chart(fig_hm, use_container_width=True)
+        style_plotly(fig_hm, "Deviasi Rata-rata Fitur per Cluster (Z-Score: merah = di atas rata-rata, biru = di bawah)", height=560, show_legend=False)
+        fig_hm.update_yaxes(autorange="reversed")
+        st.plotly_chart(fig_hm, width="stretch", theme=None)
 
         if len(C["notable"]):
-            st.markdown("**Kategori Menonjol per Cluster** (Lift >= 1.3 dan Proporsi >= 20%)")
-            st.dataframe(C["notable"].round(2), use_container_width=True)
+            section_heading("Kategori Menonjol per Cluster (lift ≥ 1,3 dan proporsi ≥ 20%)")
+            st.dataframe(C["notable"].round(2), width="stretch")
 
 
 # =============================================================================
-#  HALAMAN 5 — DATA, UNDUHAN & TENTANG PROYEK
+#  TAB 6 - DATA, EDA & UNDUHAN
 # =============================================================================
-elif page == "Data, Unduhan & Tentang":
-    section_header(
-        "Dokumentasi & Sumber Daya",
-        "Eksplorasi Data, Unduh Model & Informasi Tim Penyusun",
-        "Ringkasan dataset UCI Student Performance (Matematika), artefak model siap pakai, serta identitas proyek Kelompok 2.",
-    )
+with tab_data:
+    n_zero = int((df_raw[TARGET] == 0).sum())
+    n_miss = int(df_raw.isna().sum().sum())
+    pass_rate_all = float((df_raw[TARGET] >= PASS_THRESHOLD).mean() * 100)
 
-    dtab1, dtab2, dtab3 = st.tabs(["Eksplorasi Data (EDA)", "Unduh Artefak Model", "Tentang Proyek & Tim"])
+    dk1, dk2, dk3, dk4 = st.columns(4, gap="medium")
+    dk1.markdown(kpi_card("Dimensi Dataset", f"{df_raw.shape[0]} × {df_raw.shape[1]}", f"Sumber: {html.escape(raw_name)}", accent="cyan"), unsafe_allow_html=True)
+    dk2.markdown(kpi_card("Kualitas Data", f"{n_miss} Missing", "0 duplikasi baris penuh", accent="emerald"), unsafe_allow_html=True)
+    dk3.markdown(kpi_card("Rata-rata / Lulus G3", f"{df_raw[TARGET].mean():.2f} · {pass_rate_all:.0f}%", f"Median: {df_raw[TARGET].median():.1f} (skala 0–20)", accent="indigo"), unsafe_allow_html=True)
+    dk4.markdown(kpi_card("Kasus G3 = 0", f"{n_zero} siswa", f"{n_zero / len(df_raw):.1%} populasi (dipertahankan)", accent="amber"), unsafe_allow_html=True)
 
-    with dtab1:
-        n_zero = int((df_raw[TARGET] == 0).sum())
-        da1, da2, da3, da4 = st.columns(4)
-        with da1:
-            kpi_card("Jumlah Observasi", f"{df_raw.shape[0]}", f"Sumber: {raw_name}")
-        with da2:
-            kpi_card("Jumlah Variabel", f"{df_raw.shape[1]}", "30 fitur + G1, G2, G3")
-        with da3:
-            kpi_card("Missing Value", f"{int(df_raw.isna().sum().sum())}", "Data bersih tanpa duplikat")
-        with da4:
-            kpi_card("Siswa G3 = 0", f"{n_zero}", f"{n_zero / len(df_raw):.1%} (dipertahankan, valid)")
+    section_heading("📊 Eksplorasi Data Interaktif (EDA)")
+    e1, e2 = st.columns(2, gap="large")
+    with e1:
+        g3_grp = np.where(df_raw[TARGET] == 0, "G3 = 0 (Putus ujian/nol)", "G3 > 0")
+        fig_e1 = px.histogram(
+            df_raw.assign(Kelompok=g3_grp), x=TARGET, color="Kelompok", nbins=21,
+            color_discrete_map={"G3 = 0 (Putus ujian/nol)": COLORS["rose"], "G3 > 0": COLORS["cyan"]},
+        )
+        style_plotly(fig_e1, "Distribusi Nilai Akhir (G3) & Lonjakan Nilai Nol", height=340)
+        fig_e1.update_xaxes(title="Nilai Akhir (G3)")
+        fig_e1.update_yaxes(title="Jumlah Siswa")
+        st.plotly_chart(fig_e1, width="stretch", theme=None)
 
-        st.markdown("<div style='height: 0.7rem'></div>", unsafe_allow_html=True)
-        ec1, ec2 = st.columns(2, gap="large")
-        with ec1:
-            fig_g3 = go.Figure(go.Histogram(x=df_raw[TARGET], nbinsx=21, marker_color=COLORS["primary"]))
-            fig_g3.add_vline(x=PASS_THRESHOLD, line_dash="dash", line_color=COLORS["rose"], annotation_text="Batas Lulus (10)")
-            style_plotly(fig_g3, height=340, title="Distribusi Nilai Akhir (G3)")
-            fig_g3.update_xaxes(title_text="Nilai Akhir (G3)")
-            fig_g3.update_yaxes(title_text="Jumlah Siswa")
-            st.plotly_chart(fig_g3, use_container_width=True)
-        with ec2:
-            corr = df_raw.select_dtypes(include=np.number).corr()[TARGET].drop(TARGET).sort_values()
-            fig_cor = go.Figure(go.Bar(
-                y=[LABELS.get(c, c) for c in corr.index],
-                x=corr.values,
-                orientation="h",
-                marker_color=[COLORS["emerald"] if v > 0 else COLORS["rose"] for v in corr.values],
-            ))
-            style_plotly(fig_cor, height=340, title="Korelasi Fitur Numerik terhadap G3")
-            fig_cor.update_xaxes(title_text="Koefisien Korelasi Pearson")
-            st.plotly_chart(fig_cor, use_container_width=True)
+    with e2:
+        corr = df_raw.select_dtypes(include=np.number).corr()[TARGET].drop(TARGET).sort_values()
+        fig_e2 = go.Figure(go.Bar(
+            x=corr.values,
+            y=[f"{LABELS.get(c, c)} ({c})" for c in corr.index],
+            orientation="h",
+            marker_color=[COLORS["emerald"] if v > 0 else COLORS["rose"] for v in corr.values],
+            text=[f"{v:+.2f}" for v in corr.values], textposition="outside",
+        ))
+        style_plotly(fig_e2, "Korelasi Pearson Fitur Numerik terhadap G3", height=340, show_legend=False)
+        fig_e2.update_xaxes(title="Koefisien Korelasi (r)", range=[-0.5, 1.05])
+        st.plotly_chart(fig_e2, width="stretch", theme=None)
 
-        fig_box = go.Figure()
-        for fval in sorted(df_raw["failures"].unique()):
-            fig_box.add_trace(go.Box(
-                y=df_raw[df_raw["failures"] == fval][TARGET],
-                name=ORDINAL_LABELS["failures"].get(int(fval), str(fval)),
-                marker_color=CLUSTER_PALETTE[int(fval) % len(CLUSTER_PALETTE)],
-            ))
-        style_plotly(fig_box, height=330, title="Distribusi Nilai Akhir (G3) Berdasarkan Riwayat Kegagalan Kelas")
-        fig_box.update_yaxes(title_text="Nilai Akhir (G3)")
-        st.plotly_chart(fig_box, use_container_width=True)
+    e3, e4 = st.columns(2, gap="large")
+    with e3:
+        box_feat = st.selectbox(
+            "Eksplorasi G3 berdasarkan fitur:",
+            ["failures", "higher", "studytime", "Medu", "schoolsup", "address", "internet", "goout", "sex"],
+            format_func=lambda c: f"{LABELS.get(c, c)} ({c})",
+            key="eda_box_feat",
+        )
+        fig_e3 = px.box(
+            df_raw, x=box_feat, y=TARGET, color=box_feat,
+            color_discrete_sequence=CLUSTER_PALETTE, points="outliers",
+        )
+        style_plotly(fig_e3, f"Sebaran Nilai Akhir (G3) menurut {LABELS.get(box_feat, box_feat)}", height=330, show_legend=False)
+        st.plotly_chart(fig_e3, width="stretch", theme=None)
 
-        st.markdown("**Pratinjau Dataset (50 Baris Pertama)**")
-        st.dataframe(df_raw.head(50), use_container_width=True)
+    with e4:
+        st.markdown("<div style='height:4.2rem'></div>", unsafe_allow_html=True)
+        fig_e4 = px.scatter(
+            df_raw.assign(Status=np.where(df_raw[TARGET] == 0, "G3 = 0", "G3 > 0")),
+            x="G2", y=TARGET, color="Status",
+            color_discrete_map={"G3 = 0": COLORS["rose"], "G3 > 0": COLORS["cyan"]},
+            hover_data=["G1", "failures", "absences"],
+        )
+        fig_e4.add_trace(go.Scatter(x=[0, 20], y=[0, 20], mode="lines", name="G3 = G2", line=dict(color="#94A3B8", dash="dash")))
+        style_plotly(fig_e4, "Hubungan G2 vs G3 (Korelasi r = 0,905 & Anomali G3 = 0)", height=330)
+        st.plotly_chart(fig_e4, width="stretch", theme=None)
 
-    with dtab2:
+    with st.expander("📝 Catatan Metodologi, Cleaning & Risiko Data (sesuai Brief Proyek)"):
         st.markdown(
-            '<div class="callout">File <code>.joblib</code> menyimpan pipeline preprocessing dan model terlatih. '
-            "Pastikan versi <code>scikit-learn</code> pada lingkungan tujuan sama dengan lingkungan pelatihan.</div>",
-            unsafe_allow_html=True,
-        )
-        dl1, dl2 = st.columns(2, gap="large")
-        with dl1:
-            st.markdown("**Artefak Model Regresi**")
-            st.download_button("Unduh Model Regresi (.joblib)", model_bytes(reg_model), file_name="model_regresi.joblib", use_container_width=True)
-            st.download_button("Unduh Skema Regresi (.json)", json.dumps(reg_schema, indent=2).encode("utf-8"), file_name="schema_regresi.json", mime="application/json", use_container_width=True)
-        with dl2:
-            st.markdown("**Artefak Model Clustering & Dataset**")
-            st.download_button("Unduh Model Clustering (.joblib)", model_bytes(clu_model), file_name="model_cluster.joblib", use_container_width=True)
-            st.download_button("Unduh Skema Clustering (.json)", json.dumps(clu_schema, indent=2).encode("utf-8"), file_name="schema_cluster.json", mime="application/json", use_container_width=True)
-            st.download_button("Unduh Data dengan Label Cluster (.csv)", RES_C["df_all"].to_csv(index=False).encode("utf-8"), file_name="data_dengan_cluster.csv", mime="text/csv", use_container_width=True)
-
-    with dtab3:
-        st.markdown(
-            f'<div class="callout">'
-            f'<strong>Judul Proyek:</strong> {APP_TITLE}<br>'
-            f'<strong>Mata Kuliah:</strong> Data Sains · <strong>Kelompok 2</strong><br>'
-            f'<strong>Sumber Data:</strong> Cortez, P. &amp; Silva, A. (2008), <em>Student Performance Dataset</em> (Matematika, 395 observasi, 33 variabel), UCI Machine Learning Repository.<br>'
-            f'<strong>Keputusan Metodologi Utama:</strong> Nilai G3 = 0 (38 siswa) dan outlier valid dipertahankan; fitur <code>absences</code> dikecualikan secara default karena cakupan waktu pencatatannya tidak terinci (tersedia toggle di Pengaturan Model untuk perbandingan); seluruh encoding dan scaling di-fit hanya pada data latih.'
-            f"</div>",
-            unsafe_allow_html=True,
+            """
+            - **Sumber data**: UCI Student Performance (`student-mat`, 395 siswa, 33 kolom, 2 sekolah di Portugal: GP & MS, 2005–2006).
+            - **Keutuhan data**: 0 missing value, 0 duplikasi baris. Sebanyak 38 baris `G3 = 0` (9,6%) dan outlier tetap dipertahankan karena valid secara domain.
+            - **Risiko informasi masa depan (`absences`)**: Seluruh 38 siswa dengan `G3 = 0` tercatat `absences = 0`, dan waktu pencatatan `absences` tidak terinci. Oleh karena itu, secara default fitur `absences` dikeluarkan dari model regresi (dapat diaktifkan kembali melalui *Pengaturan Model* untuk pembandingan).
+            - **Kode ordinal vs besaran asli**: Fitur seperti `studytime`, `traveltime`, `Medu`, `Fedu`, `famrel`, `goout`, `Dalc`, `Walc`, dan `health` adalah kode kategori berurutan sehingga ditampilkan dengan label deskriptif pada antarmuka.
+            """
         )
 
-        st.markdown("#### Tim Penyusun — Kelompok 2")
-        cards_html = "".join(
-            f'<div class="member-card">'
-            f'<div class="member-idx">{i}</div>'
-            f'<div><div class="member-name">{name}</div><div class="member-nim">{nim}</div></div>'
-            f"</div>"
-            for i, (name, nim) in enumerate(TEAM_MEMBERS, start=1)
-        )
-        st.markdown(f'<div class="team-grid">{cards_html}</div>', unsafe_allow_html=True)
+    section_heading("🔍 Pratinjau Dataset Mentah")
+    st.dataframe(df_raw.head(100), width="stretch")
 
-
-# =============================================================================
-#  FOOTER MINIMALIS
-# =============================================================================
-st.markdown(
-    f'<div class="app-footer">'
-    f'<span>{COURSE_INFO} · {APP_TITLE}</span>'
-    f'<span>Dataset: UCI Student Performance (Matematika)</span>'
-    f"</div>",
-    unsafe_allow_html=True,
-)
+    section_heading("⬇️ Pusat Unduhan Model & Artefak")
+    d1, d2, d3 = st.columns(3, gap="medium")
+    with d1:
+        st.download_button("📦 Model Regresi (.joblib)", model_bytes(reg_model), file_name="model_regresi.joblib", width="stretch")
+        st.download_button("📄 Skema Regresi (.json)", json.dumps(reg_schema, indent=2).encode("utf-8"), file_name="schema_regresi.json", mime="application/json", width="stretch")
+    with d2:
+        st.download_button("📦 Model Clustering (.joblib)", model_bytes(clu_model), file_name="model_cluster.joblib", width="stretch")
+        st.download_button("📄 Skema Clustering (.json)", json.dumps(clu_schema, indent=2).encode("utf-8"), file_name="schema_cluster.json", mime="application/json", width="stretch")
+    with d3:
+        st.download_button("📊 Data + Label Cluster (.csv)", RES_C["df_all"].to_csv(index=False).encode("utf-8"), file_name="data_dengan_cluster.csv", mime="text/csv", width="stretch")
+        st.caption("File `.joblib` memerlukan versi `scikit-learn` yang kompatibel saat dimuat ulang.")
