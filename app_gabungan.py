@@ -10,8 +10,6 @@ for _k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXP
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
@@ -89,21 +87,6 @@ def info_box(title: str, body_html: str, tone: str = "sky") -> str:
 
 def section_title(text: str):
     st.markdown(f'<div class="section-title">{html.escape(text)}</div>', unsafe_allow_html=True)
-
-
-def style_plotly(fig: go.Figure, title: str = "", height: int = 360, show_legend: bool = True) -> go.Figure:
-    fig.update_layout(
-        title=dict(text=title, font=dict(size=14, color="#F0F6FC", family="Inter, sans-serif"), x=0.01, xanchor="left") if title else None,
-        height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#161B22",
-        font=dict(family="Inter, sans-serif", color="#C9D1D9", size=12),
-        margin=dict(l=48, r=24, t=52 if title else 24, b=44), showlegend=show_legend,
-        legend=dict(bgcolor="rgba(22,27,34,0.85)", bordercolor="rgba(148,163,184,0.18)", borderwidth=1, font=dict(size=11, color="#E6EDF3")),
-        hoverlabel=dict(bgcolor="#0E1117", bordercolor="#38BDF8", font=dict(color="#F0F6FC", size=12)),
-    )
-    ax = dict(gridcolor="rgba(148,163,184,0.10)", zerolinecolor="rgba(148,163,184,0.18)", linecolor="rgba(148,163,184,0.18)", tickfont=dict(color="#8B949E"), title_font=dict(color="#C9D1D9"))
-    fig.update_xaxes(**ax)
-    fig.update_yaxes(**ax)
-    return fig
 
 
 LABELS = {
@@ -537,12 +520,12 @@ mode_text = "Menggunakan G1 & G2" if use_prev_grades else "Mode Peringatan Dini 
 abs_text = "Absences dikecualikan" if exclude_absences else "Absences disertakan"
 st.markdown(
     f'<div class="app-header"><div class="app-title">Prediksi Nilai Akhir Matematika Siswa (G3)</div>'
-    f'<div class="app-subtitle">Aplikasi estimasi nilai akhir (skala 0-20), segmentasi profil siswa, ringkasan eksplorasi data, dan prediksi massal berbasis UCI Student Performance.</div>'
+    f'<div class="app-subtitle">Aplikasi estimasi nilai akhir (skala 0-20), segmentasi profil siswa, dan prediksi massal berbasis UCI Student Performance.</div>'
     f'<div class="app-meta">Mode: {mode_text} &nbsp;|&nbsp; Preprocessing: {abs_text} &nbsp;|&nbsp; Model: {html.escape(reg_schema["model_name"])} (RMSE {rm["RMSE"]:.2f})</div></div>',
     unsafe_allow_html=True,
 )
 
-tab_pred, tab_seg, tab_eda, tab_batch = st.tabs(["Prediksi Nilai", "Segmentasi Siswa", "Data & EDA", "Prediksi Massal"])
+tab_pred, tab_seg, tab_batch = st.tabs(["Prediksi Nilai", "Segmentasi Siswa", "Prediksi Massal"])
 
 with tab_pred:
     thr, rmse, mae = reg_schema["pass_threshold"], rm["RMSE"], rm["MAE"]
@@ -566,22 +549,25 @@ with tab_pred:
     k2.markdown(kpi_card("Status Kelulusan", status_label, status_sub, accent=status_accent), unsafe_allow_html=True)
     k3.markdown(kpi_card("Rentang Perkiraan (+/- 1 RMSE)", f"{lo_b:.1f} - {hi_b:.1f}", f"RMSE uji: {rmse:.2f} | MAE uji: {mae:.2f} | R²: {rm['R2']:.2f}", accent="sky"), unsafe_allow_html=True)
 
-    fig_scale = go.Figure()
-    fig_scale.add_vrect(x0=0, x1=10, fillcolor="rgba(244,63,94,0.12)", line_width=0)
-    fig_scale.add_vrect(x0=10, x1=12, fillcolor="rgba(245,158,11,0.12)", line_width=0)
-    fig_scale.add_vrect(x0=12, x1=20, fillcolor="rgba(16,185,129,0.12)", line_width=0)
-    fig_scale.add_trace(go.Bar(
-        x=[pred_g3_val], y=["Prediksi G3"], orientation="h", width=0.42,
-        marker=dict(color=bar_color, line=dict(color="#F0F6FC", width=1)),
-        text=[f" {pred_g3_val:.1f} / 20"], textposition="outside" if pred_g3_val < 17.5 else "inside",
-        textfont=dict(color="#F0F6FC", size=13), hovertemplate="Prediksi G3: %{x:.2f} / 20<extra></extra>", showlegend=False,
-    ))
-    fig_scale.add_vline(x=thr, line_dash="dash", line_color="#E6EDF3", line_width=2, annotation_text=f"Batas Lulus ({thr})", annotation_position="top right", annotation_font=dict(color="#E6EDF3", size=11))
-    style_plotly(fig_scale, "Posisi Nilai Prediksi pada Skala 0-20", height=175, show_legend=False)
-    fig_scale.update_layout(margin=dict(l=95, r=32, t=60, b=36))
-    fig_scale.update_xaxes(range=[0, 20.5], dtick=2, title="Skala Nilai (0 - 20)")
-    fig_scale.update_yaxes(showgrid=False, title="")
-    st.plotly_chart(fig_scale, width="stretch", theme=None)
+    pct_val = min(max(pred_g3_val / 20.0 * 100.0, 0.0), 100.0)
+    st.markdown(
+        f"""
+        <div style="background:#161B22;border:1px solid rgba(148,163,184,0.16);border-radius:10px;padding:1rem 1.15rem;margin:0.25rem 0 0.9rem 0;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.65rem;">
+                <span style="font-size:0.88rem;font-weight:600;color:#F0F6FC;">Posisi Nilai Prediksi pada Skala 0-20</span>
+                <span style="font-size:0.95rem;font-weight:700;color:{bar_color};font-variant-numeric:tabular-nums;">{pred_g3_val:.1f} / 20</span>
+            </div>
+            <div style="position:relative;height:18px;border-radius:9px;overflow:hidden;background:linear-gradient(90deg,rgba(244,63,94,0.18) 0%,rgba(244,63,94,0.18) 50%,rgba(245,158,11,0.18) 50%,rgba(245,158,11,0.18) 60%,rgba(16,185,129,0.18) 60%,rgba(16,185,129,0.18) 100%);border:1px solid rgba(148,163,184,0.18);">
+                <div style="height:100%;width:{pct_val:.1f}%;background:{bar_color};border-radius:9px 0 0 9px;transition:width 0.25s ease;"></div>
+                <div style="position:absolute;left:50%;top:0;bottom:0;width:2px;background:#F0F6FC;opacity:0.9;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#8B949E;margin-top:0.45rem;">
+                <span>0</span><span>5</span><span style="color:#E6EDF3;font-weight:600;">10 (Batas Lulus)</span><span>15</span><span>20</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tone, insight_title, insight_items = generate_student_insights(user_inputs, pred_g3_val, thr, use_prev_grades)
     st.markdown(info_box(insight_title, "<ul>" + "".join(f"<li>{i}</li>" for i in insight_items) + "</ul>", tone=tone), unsafe_allow_html=True)
@@ -633,78 +619,6 @@ with tab_seg:
 
     bullets_html = "<ul>" + "".join(f"<li>{html.escape(b)}</li>" for b in clu_schema["cluster_bullets"].get(cl, [])) + "</ul>"
     st.markdown(info_box(f"Karakteristik Utama Cluster {cl}", bullets_html, tone="sky"), unsafe_allow_html=True)
-
-with tab_eda:
-    n_zero, n_miss = int((df_raw[TARGET] == 0).sum()), int(df_raw.isna().sum().sum())
-    e1, e2, e3, e4 = st.columns(4, gap="medium")
-    e1.markdown(kpi_card("Total Siswa", f"{len(df_raw)}", f"Sumber: {html.escape(raw_name)}", accent="sky"), unsafe_allow_html=True)
-    e2.markdown(kpi_card("Jumlah Variabel", f"{df_raw.shape[1]}", "30 fitur profil, G1, G2, G3", accent="sky"), unsafe_allow_html=True)
-    e3.markdown(kpi_card("Kualitas Data", f"{n_miss} Missing", "0 baris duplikat penuh", accent="emerald"), unsafe_allow_html=True)
-    e4.markdown(kpi_card("Kasus G3 = 0", f"{n_zero} siswa", f"{n_zero / len(df_raw):.1%} populasi (dipertahankan)", accent="amber"), unsafe_allow_html=True)
-
-    eda_left, eda_right = st.columns(2, gap="large")
-    with eda_left:
-        g3_grp = np.where(df_raw[TARGET] == 0, "G3 = 0 (38 siswa)", "G3 > 0 (357 siswa)")
-        fig_hist = px.histogram(df_raw.assign(Kelompok=g3_grp), x=TARGET, color="Kelompok", nbins=21, color_discrete_map={"G3 = 0 (38 siswa)": COLORS["rose"], "G3 > 0 (357 siswa)": COLORS["accent"]})
-        fig_hist.add_vline(x=float(df_raw[TARGET].mean()), line_dash="dash", line_color="#E6EDF3", annotation_text=f"Rata-rata: {df_raw[TARGET].mean():.2f}", annotation_position="top right", annotation_font=dict(color="#E6EDF3", size=11))
-        style_plotly(fig_hist, "Distribusi Nilai Akhir (G3)", height=360)
-        fig_hist.update_xaxes(title="Nilai Akhir (G3)", range=[-0.6, 20.6])
-        fig_hist.update_yaxes(title="Jumlah Siswa")
-        st.plotly_chart(fig_hist, width="stretch", theme=None)
-        st.caption("Lonjakan 38 siswa di angka 0 membuat distribusi menceng ke kiri (tanpa G3=0, rata-rata naik menjadi 11,52).")
-
-    with eda_right:
-        r_g2_g3 = float(df_raw["G2"].corr(df_raw[TARGET]))
-        fig_scat = px.scatter(df_raw.assign(Status=np.where(df_raw[TARGET] == 0, "G3 = 0", "G3 > 0")), x="G2", y=TARGET, color="Status", color_discrete_map={"G3 = 0": COLORS["rose"], "G3 > 0": COLORS["accent"]}, hover_data=["G1", "failures", "absences"])
-        fig_scat.add_trace(go.Scatter(x=[0, 20], y=[0, 20], mode="lines", name="Garis G3 = G2", line=dict(color="#8B949E", dash="dash")))
-        style_plotly(fig_scat, f"Hubungan Nilai G2 terhadap G3 (r = {r_g2_g3:.3f})", height=360)
-        fig_scat.update_xaxes(title="Nilai Periode 2 (G2)", range=[-0.6, 20.6])
-        fig_scat.update_yaxes(title="Nilai Akhir (G3)", range=[-0.6, 20.6])
-        st.plotly_chart(fig_scat, width="stretch", theme=None)
-        st.caption("13 siswa dengan G2=0 seluruhnya berakhir G3=0; 25 siswa lainnya memiliki G2 > 0 namun turun ke G3=0.")
-
-    section_title("Sebaran Nilai Akhir (G3) Berdasarkan Faktor Non-Nilai")
-    box_feat = st.selectbox("Pilih faktor non-nilai:", ["failures", "Medu", "higher", "studytime", "goout", "schoolsup", "address"], format_func=lambda c: f"{LABELS.get(c, c)} ({c})", key="eda_box_feat")
-    df_box = df_raw[[box_feat, TARGET]].copy()
-    if box_feat in ORDINAL_LABELS:
-        cats_sorted = sorted(df_box[box_feat].unique())
-        df_box["Kategori"] = df_box[box_feat].map(lambda v: ORDINAL_LABELS[box_feat].get(int(v), str(v)))
-        cat_order = [ORDINAL_LABELS[box_feat].get(int(v), str(v)) for v in cats_sorted]
-    elif box_feat in VALUE_LABELS:
-        cats_sorted = sorted(df_box[box_feat].unique())
-        df_box["Kategori"] = df_box[box_feat].map(lambda v: VALUE_LABELS[box_feat].get(str(v), str(v)))
-        cat_order = [VALUE_LABELS[box_feat].get(str(v), str(v)) for v in cats_sorted]
-    else:
-        df_box["Kategori"] = df_box[box_feat].astype(str)
-        cat_order = sorted(df_box["Kategori"].unique())
-
-    fig_box = px.box(df_box, x="Kategori", y=TARGET, category_orders={"Kategori": cat_order}, points="outliers")
-    fig_box.update_traces(marker_color=COLORS["accent"], line_color=COLORS["accent"])
-    style_plotly(fig_box, f"Sebaran G3 Menurut {LABELS.get(box_feat, box_feat)}", height=360, show_legend=False)
-    fig_box.update_xaxes(title=LABELS.get(box_feat, box_feat))
-    fig_box.update_yaxes(title="Nilai Akhir (G3)", range=[-0.6, 20.6])
-    st.plotly_chart(fig_box, width="stretch", theme=None)
-
-    with st.expander("Korelasi Spearman Fitur Numerik/Ordinal terhadap G3", expanded=False):
-        num_eda_cols = df_raw.select_dtypes(include=np.number).columns.drop(TARGET)
-        spearman_s = df_raw[num_eda_cols].corrwith(df_raw[TARGET], method="spearman").sort_values()
-        fig_sp = go.Figure(go.Bar(
-            x=spearman_s.values, y=[f"{LABELS.get(c, c)} ({c})" for c in spearman_s.index], orientation="h",
-            marker_color=[COLORS["emerald"] if v > 0 else COLORS["rose"] for v in spearman_s.values],
-            text=[f"{v:+.2f}" for v in spearman_s.values], textposition="outside",
-        ))
-        style_plotly(fig_sp, "Korelasi Peringkat Spearman terhadap G3", height=420, show_legend=False)
-        fig_sp.update_xaxes(title="Koefisien Korelasi Spearman", range=[-0.55, 1.1])
-        st.plotly_chart(fig_sp, width="stretch", theme=None)
-
-    with st.expander("Catatan Cleaning & Pratinjau Dataset", expanded=False):
-        st.markdown(
-            "- **Keutuhan data**: 395 baris dan 33 kolom tanpa missing value maupun duplikasi baris penuh.\n"
-            "- **Penanganan `G3 = 0` dan outlier**: 38 baris `G3 = 0` (9,6%) dan nilai `absences` ekstrem (maksimum 75) tetap dipertahankan karena valid secara domain.\n"
-            "- **Pengecualian `absences` pada model regresi**: Seluruh 38 siswa dengan `G3 = 0` tercatat memiliki `absences = 0`, dan waktu pencatatannya tidak terinci, sehingga dikeluarkan dari regresi default.\n"
-            "- **Kode ordinal vs besaran asli**: `studytime`, `traveltime`, `Medu`, `Fedu`, `famrel`, `goout`, `Dalc`, `Walc`, dan `health` adalah kode kategori berurutan."
-        )
-        st.dataframe(df_raw.head(50), width="stretch", hide_index=True)
 
 with tab_batch:
     section_title("Prediksi Massal dari File CSV atau Excel")
