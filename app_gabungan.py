@@ -14,8 +14,9 @@ import streamlit as st
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Lasso, Ridge
+from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
@@ -108,7 +109,7 @@ HELP = {
     "traveltime": "Kode kategori waktu tempuh ke sekolah, bukan angka menit langsung.",
     "studytime": "Kode kategori durasi belajar/minggu (contoh: 2 = 2-5 jam/minggu).",
     "failures": "Jumlah kegagalan kelas sebelumnya pada CSV aktual (0, 1, 2, 3).",
-    "absences": "Total absen (0-93). Dikeluarkan dari regresi default karena cakupan waktu tidak terinci.",
+    "absences": "Total ketidakhadiran (0-93). Disertakan secara default sesuai model evaluasi utama; dapat dikecualikan lewat Pengaturan Model.",
     "G1": "Nilai periode pertama Matematika (0-20).", "G2": "Nilai periode kedua Matematika (0-20).", "G3": "Nilai akhir Matematika (0-20).",
 }
 _SCALE5 = {1: "1 - Sangat rendah", 2: "2 - Rendah", 3: "3 - Sedang", 4: "4 - Tinggi", 5: "5 - Sangat tinggi"}
@@ -183,9 +184,12 @@ def split_columns(X: pd.DataFrame):
     return num, cat
 
 
-def make_preprocessor(num_cols, cat_cols):
+def make_preprocessor(num_cols, cat_cols, scale=True):
+    num_steps = [("imp", SimpleImputer(strategy="median"))]
+    if scale:
+        num_steps.append(("sc", StandardScaler()))
     return ColumnTransformer([
-        ("num", Pipeline([("imp", SimpleImputer(strategy="median")), ("sc", StandardScaler())]), num_cols),
+        ("num", Pipeline(num_steps), num_cols),
         ("cat", Pipeline([("imp", SimpleImputer(strategy="most_frequent")), ("ohe", OneHotEncoder(handle_unknown="ignore", drop="if_binary", sparse_output=False))]), cat_cols),
     ])
 
@@ -211,15 +215,22 @@ def train_regression(_df: pd.DataFrame, data_key: str, use_prev_grades: bool, ex
     num_cols, cat_cols = split_columns(X)
     X[num_cols] = X[num_cols].astype(float)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE)
+    y_bins = pd.qcut(y, q=5, duplicates="drop", labels=False)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y_bins
+    )
     if use_prev_grades:
-        model_name = "Lasso (alpha=0.05)"
-        est = Lasso(alpha=0.05, random_state=RANDOM_STATE)
+        model_name = "Gradient Boosting"
+        use_scale = False
+        est = GradientBoostingRegressor(
+            n_estimators=100, learning_rate=0.1, max_depth=2, min_samples_leaf=10, random_state=RANDOM_STATE
+        )
     else:
         model_name = "Ridge (alpha=50)"
+        use_scale = True
         est = Ridge(alpha=50.0)
 
-    pipe = Pipeline([("pre", make_preprocessor(num_cols, cat_cols)), ("m", est)])
+    pipe = Pipeline([("pre", make_preprocessor(num_cols, cat_cols, scale=use_scale)), ("m", est)])
     pipe.fit(X_train, y_train)
     pred_train = np.clip(pipe.predict(X_train), 0, 20)
     pred_test = np.clip(pipe.predict(X_test), 0, 20)
@@ -246,10 +257,10 @@ def train_clustering(_df: pd.DataFrame, data_key: str, include_grades: bool = Tr
     num_cols, cat_cols = split_columns(feat_df)
     feat_df[num_cols] = feat_df[num_cols].astype(float)
 
-    transformer = Pipeline([("pre", make_preprocessor(num_cols, cat_cols)), ("pca", PCA(n_components=0.80, random_state=RANDOM_STATE))])
+    transformer = Pipeline([("pre", make_preprocessor(num_cols, cat_cols, scale=True)), ("pca", PCA(n_components=0.80, random_state=RANDOM_STATE))])
     df_train, _ = train_test_split(feat_df, test_size=TEST_SIZE, random_state=RANDOM_STATE)
     Z_train = transformer.fit_transform(df_train)
-    kmeans = KMeans(n_clusters=3, n_init=10, random_state=RANDOM_STATE).fit(Z_train)
+    kmeans = KMeans(n_clusters=3, n_init=50, random_state=RANDOM_STATE).fit(Z_train)
     final_pipeline = Pipeline(transformer.steps + [("cluster", kmeans)])
 
     clusters = final_pipeline.predict(feat_df)
@@ -279,6 +290,8 @@ def train_clustering(_df: pd.DataFrame, data_key: str, include_grades: bool = Tr
             bullets.append(f"Riwayat gagal kelas lebih tinggi dari rata-rata ({row['failures']:.2f} vs {pop_means['failures']:.2f} kali).")
         elif row["failures"] < pop_means["failures"] - 0.10:
             bullets.append(f"Riwayat gagal kelas sangat rendah ({row['failures']:.2f} kali vs rata-rata {pop_means['failures']:.2f}).")
+        if z.get("absences", 0) > 0.25:
+            bullets.append(f"Ketidakhadiran lebih tinggi dari rata-rata ({row['absences']:.1f} vs {pop_means['absences']:.1f} hari).")
         if z.get("studytime", 0) > 0.25:
             bullets.append(f"Skor waktu belajar lebih tinggi dari rata-rata populasi ({row['studytime']:.2f} vs {pop_means['studytime']:.2f}).")
         elif z.get("studytime", 0) < -0.25:
@@ -460,6 +473,8 @@ def generate_student_insights(inputs: dict, pred: float, thr: float, use_prev: b
         notes.append("<strong>Tidak berencana melanjutkan kuliah</strong>: Pada data historis, kelompok ini memiliki rata-rata G3 lebih rendah dibandingkan yang berencana kuliah.")
     if inputs.get("goout", 3) >= 4:
         notes.append("<strong>Intensitas keluar bersama teman tinggi</strong>; perlu keseimbangan waktu antara aktivitas sosial dan belajar.")
+    if inputs.get("absences", 0) >= 15:
+        notes.append(f"<strong>Ketidakhadiran tinggi ({int(inputs['absences'])} hari)</strong> berasosiasi dengan potensi tertinggalnya materi pelajaran.")
     if not notes:
         notes.append("Profil belajar dan riwayat akademik berada pada kondisi yang mendukung capaian nilai akhir yang stabil.")
     notes.append("<em>Catatan metodologis: Interpretasi ini mencerminkan pola asosiasi statistik dari data historis Portugal (2005-2006), bukan hubungan sebab-akibat langsung.</em>")
@@ -483,7 +498,7 @@ with st.sidebar:
     with st.expander("Pengaturan Model", expanded=False):
         with st.form("model_settings"):
             f_prev = st.toggle("Gunakan nilai G1 dan G2", value=True, help="Nonaktifkan untuk simulasi prediksi dini sebelum nilai periode 1 dan 2 tersedia.")
-            f_no_abs = st.toggle("Kecualikan fitur absences", value=True, help="Sesuai catatan cleaning: waktu pencatatan absences tidak terinci dan seluruh G3=0 tercatat absences=0.")
+            f_no_abs = st.toggle("Kecualikan fitur absences", value=False, help="Aktifkan jika ingin menguji model tanpa fitur absences (risiko bias absences=0 pada kasus G3=0).")
             st.form_submit_button("Terapkan Pengaturan", width="stretch")
     use_prev_grades, exclude_absences = f_prev, f_no_abs
 
